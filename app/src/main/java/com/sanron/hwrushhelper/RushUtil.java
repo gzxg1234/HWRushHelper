@@ -201,7 +201,7 @@ public class RushUtil {
                                 try {
                                     JSONObject resp = new JSONObject(respStr);
 
-                                    boolean test = new Random().nextInt(10) <9;
+                                    boolean test = new Random().nextInt(10) < 9 && false;
 
                                     if ((test || resp.optBoolean("success", false))) {
                                         synchronized (lock) {

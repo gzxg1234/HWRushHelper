@@ -1,5 +1,6 @@
 package com.sanron.hwrushhelper;
 
+import android.app.ProgressDialog;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.Html;
@@ -30,6 +31,9 @@ import androidx.databinding.DataBindingUtil;
 public class MainActivity extends AppCompatActivity {
     ActivityMainBinding binding;
 
+    //获取抢购页面的跳转地址
+    ProgressDialog pd;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -58,7 +62,9 @@ public class MainActivity extends AppCompatActivity {
         });
 
         binding.btnReadyRush.setOnClickListener(v -> {
-            //获取抢购页面的跳转地址
+            pd = new ProgressDialog(MainActivity.this);
+            pd.setMessage("等待。。。太久没反应关了");
+            pd.show();
             binding.webview.evaluateJavascript(RushUtil.GET_RUSH_JS, value -> {
                 try {
                     JSONObject obj = new JSONObject(value);
@@ -71,6 +77,7 @@ public class MainActivity extends AppCompatActivity {
                         @Override
                         public void onReceiveValue(String value) {
                             if ("error".equals(value)) {
+                                pd.dismiss();
                                 ToastOfJH.show("获取ActId失败");
                                 return;
                             }
