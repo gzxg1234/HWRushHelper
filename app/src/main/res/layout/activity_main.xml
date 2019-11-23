@@ -18,30 +18,38 @@
             android:layout_height="?attr/actionBarSize"
             android:background="@color/colorPrimary">
 
-            <EditText
-                android:id="@+id/et_url"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:enabled="false"
-                android:imeOptions="actionGo"
-                android:inputType="text"
-                android:singleLine="true"/>
+            <Button
+                android:id="@+id/btn_matex"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="matex页"/>
+
+            <Button
+                android:id="@+id/btn_mate30"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="mate30页"/>
 
             <Button
                 android:id="@+id/btn_refresh"
                 android:layout_width="?attr/actionBarSize"
                 android:layout_height="?attr/actionBarSize"
                 android:text="刷新"/>
+
+            <Button
+                android:id="@+id/btn_setting"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="设置"/>
         </LinearLayout>
 
-        <com.tencent.smtt.sdk.WebView
+        <com.sanron.hwrushhelper.BaseWebView
             android:id="@+id/webview"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1">
 
-        </com.tencent.smtt.sdk.WebView>
+        </com.sanron.hwrushhelper.BaseWebView>
 
 
         <LinearLayout
@@ -53,7 +61,28 @@
                 android:id="@+id/btn_ready_rush"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="准备抢"/>
+                android:text="开抢"/>
+
+            <CheckBox
+                android:id="@+id/cb_auto_retry"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="20dp"
+                android:checked="true"
+                android:text="自动重试"/>
+
+            <Button
+                android:id="@+id/btn_get_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="20dp"
+                android:text="同步时间"/>
+
+            <TextView
+                android:id="@+id/tv_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="10:30:23"/>
         </LinearLayout>
     </LinearLayout>
 </layout>

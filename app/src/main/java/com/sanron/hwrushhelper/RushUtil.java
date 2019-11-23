@@ -1,5 +1,7 @@
 package com.sanron.hwrushhelper;
 
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -35,6 +37,8 @@ import okhttp3.logging.HttpLoggingInterceptor;
  */
 @SuppressWarnings("AlibabaAvoidManuallyCreateThread")
 public class RushUtil {
+
+    public static SharedPreferences sp = App.getInstance().getSharedPreferences("se", Context.MODE_PRIVATE);
 
     public static final String GET_RUSH_JS = "(function() {\n" +
             "    var ks = [\"uid\", \"user\", \"name\", \"ts\", \"valid\", \"sign\", \"cid\", \"wi\", \"ticket\", \"hasphone\", \"hasmail\",\n" +
@@ -164,8 +168,8 @@ public class RushUtil {
         Request request = builder.build();
 
         AtomicBoolean success = new AtomicBoolean(false);
-        final long interval = 1000;
 
+        long interval = getQueryInterval();
         List<Call> calls = new ArrayList<>();
         AtomicBoolean cancel = new AtomicBoolean(false);
         new Thread() {
@@ -186,22 +190,10 @@ public class RushUtil {
                         public void onResponse(Call call, Response response) throws IOException {
                             if (response.isSuccessful() && !call.isCanceled() && !success.get()) {
                                 String respStr = response.body().string();
-//                    ec.util.cookie.set("orderSign-" + ec.activityId + "-" + k.uid, k.orderSign, j);
-//                    if (ec.flowType == 2) {
-//                        ec.reserveTimes(k, b)
-//                    } else {
-//                        var f = ec.url.chooseComponent + "?nowTime=" + d + skus;
-//                        if (ec.isRequestFromVmall) {
-//                            f = f + "&backUrl=" + encodeURIComponent(ec.paramForVmall.backUrl) + (ec.paramForVmall.giftSkus ? "&optionalGiftIds=" + ec.paramForVmall.giftSkus : "") + (ec.paramForVmall.accessoriesSkus ? "&componentIds=" + ec.paramForVmall.accessoriesSkus : "") + (ec.paramForVmall.diyPackSkus ? "&diyPackSkus=" + ec.paramForVmall.diyPackSkus : "")
-//                        }
-//                        var h = ec.url.activity;
-//                        window.location.href = f + "&rushbuy_js_version=" + ec.rushbuy_js_version + "&backto=" + encodeURIComponent(h)
-//                    }
-//                }
                                 try {
                                     JSONObject resp = new JSONObject(respStr);
 
-                                    boolean test = new Random().nextInt(10) < 9 && false;
+                                    boolean test = new Random().nextInt(10) < 5 && false;
 
                                     if ((test || resp.optBoolean("success", false))) {
                                         synchronized (lock) {
@@ -250,5 +242,44 @@ public class RushUtil {
                 qqcall.cancel();
             }
         };
+    }
+
+
+    public static void getHwTime(ValueCallback<Date> callback) {
+        String url = "https://www.vmall.com/system/queryStatus.json";
+        Request.Builder builder = new Request.Builder()
+                .url(url);
+        Request request = builder.build();
+        long x = System.currentTimeMillis();
+        sOkHttpClient.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                long c = (long) ((System.currentTimeMillis() - x) / 2f);
+                Log.d("sanron", "同步时间从请求到返回的时间差" + c * 2);
+                if (response.isSuccessful()) {
+                    String date = response.header("Date");
+                    new Handler(Looper.getMainLooper()).post(() -> {
+                        Date x = new Date(date);
+                        x.setTime(x.getTime() + c);
+                        callback.onReceiveValue(x);
+                    });
+                }
+            }
+        });
+    }
+
+    public static void setQueryInterval(long t) {
+        sp.edit()
+                .putLong("qi", t)
+                .apply();
+    }
+
+    public static long getQueryInterval() {
+        return sp.getLong("qi", 500);
     }
 }

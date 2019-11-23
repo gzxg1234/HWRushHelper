@@ -2,20 +2,18 @@ package com.sanron.hwrushhelper;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
-import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
-import android.webkit.CookieManager;
-import android.webkit.ValueCallback;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
+
+import com.tencent.smtt.sdk.ValueCallback;
+import com.tencent.smtt.sdk.WebView;
+import com.tencent.smtt.sdk.WebViewClient;
 
 /**
  * @author chenrong
  * @date 2019/11/22
  */
-public class WebView1 extends WebView {
+public class WebView1 extends BaseWebView {
 
 
     public ValueCallback<String> mCallback;
@@ -23,20 +21,8 @@ public class WebView1 extends WebView {
     @SuppressLint("JavascriptInterface")
     public WebView1(Context context) {
         super(context);
-        getSettings().setJavaScriptEnabled(true);
-        getSettings().setDomStorageEnabled(true);
-        getSettings().setAppCacheEnabled(true);
-        getSettings().setLoadWithOverviewMode(true);
-        getSettings().setDatabaseEnabled(true);
-        CookieManager.getInstance().setAcceptCookie(true);
-        CookieManager.getInstance().setAcceptThirdPartyCookies(this, true);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            getSettings().setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-        }
-        CookieManager.getInstance().setAcceptCookie(true);
 
         getSettings().setUserAgentString("Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.36");
-        CookieManager.setAcceptFileSchemeCookies(true);
 
         setWebViewClient(new WebViewClient() {
 
