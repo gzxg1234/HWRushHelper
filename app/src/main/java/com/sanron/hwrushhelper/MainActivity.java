@@ -42,6 +42,8 @@ public class MainActivity extends AppCompatActivity {
 
     JSONObject rushParams;
 
+    Runnable cancelQuery;
+
     int retryCount = 0;
     boolean retrying = false;
     boolean needRetry = false;
@@ -139,12 +141,17 @@ public class MainActivity extends AppCompatActivity {
             binding.webview.reload();
         });
 
+        waitDlg.setOnCancelListener(dialog -> {
+            if (cancelQuery != null) {
+                cancelQuery.run();
+            }
+            needRetry = false;
+        });
         binding.btnReadyRush.setOnClickListener(v -> {
             needRetry = binding.cbAutoRetry.isChecked();
             retryCount = 0;
             waitDlg.setMessage("获取基础参数。。。太久没反应关了");
             waitDlg.show();
-            waitDlg.setOnCancelListener(null);
             binding.webview.evaluateJavascript(RushUtil.GET_RUSH_JS, value -> {
                 try {
                     JSONObject obj = new JSONObject(value);
@@ -173,7 +180,10 @@ public class MainActivity extends AppCompatActivity {
 
                                 Log.d("sanron", "获取actId和jsVer完毕，开始createOrder步骤");
 
-                                RushUtil.startRush(params, new ValueCallback<String>() {
+                                if (cancelQuery != null) {
+                                    cancelQuery.run();
+                                }
+                                cancelQuery = RushUtil.startRush(params, new ValueCallback<String>() {
                                     @Override
                                     public void onReceiveValue(String submitUrl) {
                                         Log.d("sanron", "提交订单页面url:" + submitUrl);
@@ -288,10 +298,10 @@ public class MainActivity extends AppCompatActivity {
                             waitDlg.setCanceledOnTouchOutside(false);
                             if (rushParams != null) {
                                 waitDlg.show();
-                                waitDlg.setOnCancelListener(dialog -> {
-                                    needRetry = false;
-                                });
-                                RushUtil.startRush(rushParams, new ValueCallback<String>() {
+                                if (cancelQuery != null) {
+                                    cancelQuery.run();
+                                }
+                                cancelQuery = RushUtil.startRush(rushParams, new ValueCallback<String>() {
                                     @Override
                                     public void onReceiveValue(String submitUrl) {
                                         Log.d("sanron", "提交订单页面url:" + submitUrl);
@@ -309,8 +319,10 @@ public class MainActivity extends AppCompatActivity {
                                     .setPositiveButton("重试", (dialog, which) -> {
                                         if (rushParams != null) {
                                             waitDlg.show();
-                                            waitDlg.setOnCancelListener(null);
-                                            RushUtil.startRush(rushParams, new ValueCallback<String>() {
+                                            if (cancelQuery != null) {
+                                                cancelQuery.run();
+                                            }
+                                            cancelQuery = RushUtil.startRush(rushParams, new ValueCallback<String>() {
                                                 @Override
                                                 public void onReceiveValue(String submitUrl) {
                                                     Log.d("sanron", "提交订单页面url:" + submitUrl);
