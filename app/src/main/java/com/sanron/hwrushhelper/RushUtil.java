@@ -15,14 +15,15 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Random;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import okhttp3.CacheControl;
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.FormBody;
@@ -129,6 +130,7 @@ public class RushUtil {
 
 
     public static OkHttpClient sOkHttpClient;
+    public static OkHttpClient rushClient;
 
     static {
         HttpLoggingInterceptor httpLoggingInterceptor = new HttpLoggingInterceptor();
@@ -136,20 +138,18 @@ public class RushUtil {
         sOkHttpClient = new OkHttpClient.Builder()
                 .followSslRedirects(true)
                 .followRedirects(true)
-                .connectTimeout(10000, TimeUnit.SECONDS)
-                .readTimeout(10000, TimeUnit.SECONDS)
-                .writeTimeout(3000, TimeUnit.SECONDS)
-//                .addInterceptor(httpLoggingInterceptor)
                 .build();
+        rushClient = sOkHttpClient.newBuilder().callTimeout(500, TimeUnit.MILLISECONDS).build();
     }
 
 
     public static final String CREATE_ORDER_URL = "https://ord01.vmall.com/order/pwm86t/createOrder.do";
     public static final String SUBMIT_ORDER_URL = "https://buy.vmall.com/submit_order.html";
 
+    public static final ExecutorService executor = Executors.newCachedThreadPool();
+
     public static Runnable startRush(JSONObject data, ValueCallback<String> callback) {
 
-        final Object lock = new Object();
         String actId = data.optString("activityId");
         String skuId = data.optString("skuId");
         String rushJsVer = data.optString("rushJsVer");
@@ -167,90 +167,66 @@ public class RushUtil {
                 .url(CREATE_ORDER_URL);
         Request request = builder.build();
 
-        AtomicBoolean success = new AtomicBoolean(false);
-
         long interval = getQueryInterval();
-        List<Call> calls = new ArrayList<>();
         AtomicBoolean cancel = new AtomicBoolean(false);
-        new Thread() {
-            @Override
-            public void run() {
-                int i = 0;
-                while (!success.get() && !cancel.get()) {
-                    final int curI = ++i;
-                    Call call = sOkHttpClient.newCall(request);
-                    calls.add(call);
-                    call.enqueue(new Callback() {
-                        @Override
-                        public void onFailure(Call call, IOException e) {
 
-                        }
+        executor.execute(() -> {
+            int i = 0;
+            while (!cancel.get()) {
+                final int curI = ++i;
+                Call call = rushClient.newCall(request);
+                Log.d("sunron", String.format("第%d次查询是否有货", curI));
+                try {
+                    Response response = call.execute();
+                    if (response.isSuccessful() && response.body() != null && !call.isCanceled() && !cancel.get()) {
+                        String respStr = response.body().string();
+                        try {
+                            JSONObject resp = new JSONObject(respStr);
+                            boolean test = new Random().nextInt(10) < 5 && false;
 
-                        @Override
-                        public void onResponse(Call call, Response response) throws IOException {
-                            if (response.isSuccessful() && !call.isCanceled() && !success.get()) {
-                                String respStr = response.body().string();
-                                try {
-                                    JSONObject resp = new JSONObject(respStr);
-
-                                    boolean test = new Random().nextInt(10) < 5 && false;
-
-                                    if ((test || resp.optBoolean("success", false))) {
-                                        synchronized (lock) {
-                                            if (!success.get()) {
-                                                success.set(true);
-                                            } else {
-                                                return;
-                                            }
-                                        }
-                                        Log.d("sanron", String.format("第%d次请求查到有货，准备去提交订单页面", curI));
-                                        for (Call qqcall : calls) {
-                                            qqcall.cancel();
-                                        }
-                                        //成功，有余件，进入下一个提交订单页面
-                                        String key = "orderSign-" + actId + "-" + resp.optString("uid");
-                                        String value = String.format("%s;expires=%s;path=/;domain=vmall.com",
-                                                resp.optString("orderSign", ""),
-                                                new Date().toGMTString());
-                                        Log.d("sanron", "设置cookie=>" + key + "=" + value);
-                                        CookieManager.getInstance().setCookie("vmall.com", key + "=" + value);
-                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                                            CookieManager.getInstance().flush();
-                                        }
-
-                                        String nowTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
-
-                                        String submitQuery = String.format("nowTime=%s&skuId=%s&skuIds=%s&activityId=%s&rushbuy_js_version=%s",
-                                                nowTime, skuId, skuId, actId, rushJsVer);
-                                        String submitUrl = SUBMIT_ORDER_URL + "?" + submitQuery;
-                                        new Handler(Looper.getMainLooper()).post(() -> callback.onReceiveValue(submitUrl));
-                                    }
-                                } catch (JSONException e) {
-                                    e.printStackTrace();
+                            Log.d("sunron", String.format("第%d次查询结果%s", curI, resp.toString()));
+                            if ((test || resp.optBoolean("success", false))) {
+                                Log.d("sunron", String.format("第%d次请求查到有货，准备去提交订单页面", curI));
+                                //成功，有余件，进入下一个提交订单页面
+                                String key = "orderSign-" + actId + "-" + resp.optString("uid");
+                                String value = String.format("%s;expires=%s;path=/;domain=vmall.com",
+                                        resp.optString("orderSign", ""),
+                                        new Date().toGMTString());
+                                Log.d("sunron", "设置cookie=>" + key + "=" + value);
+                                CookieManager.getInstance().setCookie("vmall.com", key + "=" + value);
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                                    CookieManager.getInstance().flush();
                                 }
+                                String nowTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
 
+                                String submitQuery = String.format("nowTime=%s&skuId=%s&skuIds=%s&activityId=%s&rushbuy_js_version=%s",
+                                        nowTime, skuId, skuId, actId, rushJsVer);
+                                String submitUrl = SUBMIT_ORDER_URL + "?" + submitQuery;
+                                new Handler(Looper.getMainLooper()).post(() -> callback.onReceiveValue(submitUrl));
                             }
+                        } catch (JSONException e) {
+                            e.printStackTrace();
                         }
-                    });
-                    SystemClock.sleep(interval);
+
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
                 }
+                SystemClock.sleep(interval);
             }
-        }.start();
-        return () -> {
-            cancel.set(true);
-            for (Call qqcall : calls) {
-                qqcall.cancel();
-            }
-        };
+        });
+
+        return () -> cancel.set(true);
     }
 
 
     public static void getHwTime(ValueCallback<Date> callback) {
-        String url = "https://www.vmall.com/system/queryStatus.json";
+        String url = "https://www.vmall.com/system/getSysDate.json";
         Request.Builder builder = new Request.Builder()
+                .cacheControl(CacheControl.FORCE_NETWORK)
                 .url(url);
         Request request = builder.build();
-        long x = System.currentTimeMillis();
+//
         sOkHttpClient.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
@@ -259,13 +235,10 @@ public class RushUtil {
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
-                long c = (long) ((System.currentTimeMillis() - x) / 2f);
-                Log.d("sanron", "同步时间从请求到返回的时间差" + c * 2);
                 if (response.isSuccessful()) {
                     String date = response.header("Date");
                     new Handler(Looper.getMainLooper()).post(() -> {
                         Date x = new Date(date);
-                        x.setTime(x.getTime() + c);
                         callback.onReceiveValue(x);
                     });
                 }
@@ -280,6 +253,6 @@ public class RushUtil {
     }
 
     public static long getQueryInterval() {
-        return sp.getLong("qi", 500);
+        return sp.getLong("qi", 100);
     }
 }

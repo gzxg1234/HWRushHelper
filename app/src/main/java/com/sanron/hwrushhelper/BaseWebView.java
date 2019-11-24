@@ -1,6 +1,7 @@
 package com.sanron.hwrushhelper;
 
 import android.content.Context;
+import android.content.res.Configuration;
 import android.os.Build;
 import android.util.AttributeSet;
 import android.util.Log;
@@ -24,8 +25,16 @@ public class BaseWebView extends WebView {
         this(context, attrs, android.R.attr.webViewStyle);
     }
 
+    public static Context getFixedContext(Context context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            return context.createConfigurationContext(new Configuration());
+        } else {
+            return context;
+        }
+    }
+
     public BaseWebView(Context context, AttributeSet attributeSet, int i) {
-        super(context, attributeSet, i);
+        super(getFixedContext(context), attributeSet, i);
         WebSettings settings = getSettings();
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
         settings.setJavaScriptEnabled(true);
@@ -67,7 +76,7 @@ public class BaseWebView extends WebView {
         addJavascriptInterface(new Object() {
             @JavascriptInterface
             public void log(String msg) {
-                Log.d("sanron", msg);
+                Log.d("sunron", msg);
             }
         }, "app");
     }

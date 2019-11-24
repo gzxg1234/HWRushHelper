@@ -69,7 +69,6 @@ public class MainActivity extends AppCompatActivity {
         RushUtil.getHwTime(value -> {
             if (value != null) {
                 timeCha = value.getTime() - System.currentTimeMillis();
-                binding.tvTime.setText(sdf.format(value));
                 if (mTimer != null) {
                     mTimer.cancel();
                 }
@@ -117,15 +116,15 @@ public class MainActivity extends AppCompatActivity {
             binding.webview.clearHistory();
             binding.webview.loadUrl("https://www.vmall.com/product/10086374426533.html");
         });
+        binding.btnMatex.setOnClickListener(v -> {
+            binding.webview.clearHistory();
+            binding.webview.loadUrl("https://www.vmall.com/product/10086831441169.html");
+        });
         binding.btnSetting.setOnClickListener(v -> {
             new SettingDialog(MainActivity.this).show();
         });
         binding.btnGetTime.setOnClickListener(v -> {
             syncTime();
-        });
-        binding.btnMatex.setOnClickListener(v -> {
-            binding.webview.clearHistory();
-            binding.webview.loadUrl("https://www.vmall.com/product/10086831441169.html");
         });
 //        binding.etUrl.setOnEditorActionListener(new TextView.OnEditorActionListener() {
 //            @Override
@@ -157,7 +156,7 @@ public class MainActivity extends AppCompatActivity {
                     JSONObject obj = new JSONObject(value);
                     JSONObject params = obj.optJSONObject("createOrderParams");
                     String rushUrl = Html.fromHtml(obj.optString("rushUrl")).toString();
-                    Log.d("sanron", "排队页面url=" + rushUrl);
+                    Log.d("sunron", "排队页面url=" + rushUrl);
 
                     WebView1 s = new WebView1(MainActivity.this);
                     s.getActId(rushUrl, new ValueCallback<String>() {
@@ -178,15 +177,18 @@ public class MainActivity extends AppCompatActivity {
 
                                 rushParams = params;
 
-                                Log.d("sanron", "获取actId和jsVer完毕，开始createOrder步骤");
+                                Log.d("sunron", String.format("获取actId和jsVer完毕，actId=%s,jsVer=%s", actId, rushJsVer));
+                                Log.d("sunron", "开始轮训是否有货步骤");
 
+                                waitDlg.setMessage("轮训是否有货。。。。");
                                 if (cancelQuery != null) {
                                     cancelQuery.run();
                                 }
                                 cancelQuery = RushUtil.startRush(params, new ValueCallback<String>() {
                                     @Override
                                     public void onReceiveValue(String submitUrl) {
-                                        Log.d("sanron", "提交订单页面url:" + submitUrl);
+                                        waitDlg.setMessage("提交订单。。。。");
+                                        Log.d("sunron", "开始进入提交步骤，页面url:" + submitUrl);
                                         gotoSubmitOrder(submitUrl);
                                     }
                                 });
@@ -217,7 +219,14 @@ public class MainActivity extends AppCompatActivity {
                 if (newProgress >= 50 && !x.get()) {
                     x.set(true);
                     view.evaluateJavascript("(function() {\n" +
+                            "    var count = 0;\n" +
+                            "\n" +
                             "    function x() {\n" +
+                            "        if (++count >= 100) {\n" +
+                            "            app.log(\"提交订单页面获取参数超时\");\n" +
+                            "            native.rushResult(false);\n" +
+                            "            return;\n" +
+                            "        }\n" +
                             "        if (typeof flowType != 'undefined' && typeof ec != 'undefined' && ec.order && ec.order.checkOrder && ec.order\n" +
                             "            .checkOrder.doSubmit &&\n" +
                             "            $ && $(\"#_address\").text()) {\n" +
@@ -304,7 +313,7 @@ public class MainActivity extends AppCompatActivity {
                                 cancelQuery = RushUtil.startRush(rushParams, new ValueCallback<String>() {
                                     @Override
                                     public void onReceiveValue(String submitUrl) {
-                                        Log.d("sanron", "提交订单页面url:" + submitUrl);
+                                        Log.d("sunron", "提交订单页面url:" + submitUrl);
                                         gotoSubmitOrder(submitUrl);
                                     }
                                 });
@@ -325,7 +334,7 @@ public class MainActivity extends AppCompatActivity {
                                             cancelQuery = RushUtil.startRush(rushParams, new ValueCallback<String>() {
                                                 @Override
                                                 public void onReceiveValue(String submitUrl) {
-                                                    Log.d("sanron", "提交订单页面url:" + submitUrl);
+                                                    Log.d("sunron", "提交订单页面url:" + submitUrl);
                                                     gotoSubmitOrder(submitUrl);
                                                 }
                                             });
@@ -343,10 +352,11 @@ public class MainActivity extends AppCompatActivity {
             @Nullable
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                if (request.getUrl().getLastPathSegment().endsWith(".jpg")
+                if (request.getUrl().getLastPathSegment() != null
+                        && (request.getUrl().getLastPathSegment().endsWith(".jpg")
                         || request.getUrl().getLastPathSegment().endsWith(".gif")
                         || request.getUrl().getLastPathSegment().endsWith(".jpeg")
-                        || request.getUrl().getLastPathSegment().endsWith(".png")) {
+                        || request.getUrl().getLastPathSegment().endsWith(".png"))) {
                     return new WebResourceResponse(null, null, null);
                 }
                 return super.shouldInterceptRequest(view, request);
