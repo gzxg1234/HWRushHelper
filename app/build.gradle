@@ -13,8 +13,18 @@ android {
             abiFilters "armeabi", "armeabi-v7a", "x86", "mips"
         }
     }
+
+    signingConfigs{
+        release{
+            storeFile file("sign.jks")
+            keyAlias 'key0'
+            keyPassword 'cr1234'
+            storePassword 'cr1234'
+        }
+    }
     buildTypes {
         release {
+            signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
