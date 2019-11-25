@@ -10,6 +10,11 @@ import android.text.Html;
 import android.util.Log;
 import android.webkit.JavascriptInterface;
 
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDialog;
+import androidx.databinding.DataBindingUtil;
+
 import com.sanron.hwrushhelper.databinding.ActivityMainBinding;
 import com.sanron.hwrushhelper.databinding.DlgLogBinding;
 import com.tencent.smtt.export.external.interfaces.WebResourceRequest;
@@ -28,11 +33,6 @@ import java.util.Locale;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import androidx.annotation.Nullable;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.app.AppCompatDialog;
-import androidx.databinding.DataBindingUtil;
 
 public class MainActivity extends AppCompatActivity {
     ActivityMainBinding binding;
@@ -112,6 +112,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void initView() {
         waitDlg = new ProgressDialog(MainActivity.this);
+        waitDlg.setCanceledOnTouchOutside(false);
         binding.btnMate30.setOnClickListener(v -> {
             binding.webview.clearHistory();
             binding.webview.loadUrl("https://www.vmall.com/product/10086374426533.html");
@@ -174,24 +175,37 @@ public class MainActivity extends AppCompatActivity {
                                 String rushJsVer = r.optString("rushJsVer");
                                 params.put("activityId", actId);
                                 params.put("rushJsVer", rushJsVer);
+                                params.put("cookie", r.optString("cookie"));
 
                                 rushParams = params;
 
                                 Log.d("sunron", String.format("获取actId和jsVer完毕，actId=%s,jsVer=%s", actId, rushJsVer));
                                 Log.d("sunron", "开始轮训是否有货步骤");
 
-                                waitDlg.setMessage("轮训是否有货。。。。");
-                                if (cancelQuery != null) {
-                                    cancelQuery.run();
-                                }
-                                cancelQuery = RushUtil.startRush(params, new ValueCallback<String>() {
-                                    @Override
-                                    public void onReceiveValue(String submitUrl) {
-                                        waitDlg.setMessage("提交订单。。。。");
-                                        Log.d("sunron", "开始进入提交步骤，页面url:" + submitUrl);
-                                        gotoSubmitOrder(submitUrl);
-                                    }
-                                });
+                                waitDlg.dismiss();
+                                AlertDialog dlg = new AlertDialog.Builder(MainActivity.this).setMessage("基础参数准备完毕，确认开始轮训是否有货\n（开抢前1-2秒点）")
+                                        .setPositiveButton("确定", (dialog, which) -> {
+                                            waitDlg.setMessage("轮训是否有货。。。。");
+                                            waitDlg.show();
+                                            if (cancelQuery != null) {
+                                                cancelQuery.run();
+                                            }
+                                            cancelQuery = RushUtil.startRush(params, new ValueCallback<String>() {
+                                                @Override
+                                                public void onReceiveValue(String submitUrl) {
+                                                    waitDlg.setMessage("提交订单。。。。");
+                                                    Log.d("sunron", "开始进入提交步骤，页面url:" + submitUrl);
+                                                    gotoSubmitOrder(submitUrl);
+                                                }
+                                            });
+                                        })
+                                        .setNegativeButton("取消", (dialog, which) -> {
+                                            dialog.dismiss();
+                                        })
+                                        .create();
+                                dlg.setCanceledOnTouchOutside(false);
+                                dlg.show();
+
                             } catch (JSONException e) {
                                 e.printStackTrace();
                             }

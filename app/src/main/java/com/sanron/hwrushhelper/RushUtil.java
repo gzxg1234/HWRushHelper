@@ -2,13 +2,13 @@ package com.sanron.hwrushhelper;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.util.Log;
-import android.webkit.CookieManager;
 import android.webkit.ValueCallback;
+
+import com.tencent.smtt.sdk.CookieManager;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -30,6 +30,7 @@ import okhttp3.FormBody;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import okhttp3.ResponseBody;
 import okhttp3.logging.HttpLoggingInterceptor;
 
 /**
@@ -122,6 +123,7 @@ public class RushUtil {
             "\n" +
             "    var result = {};\n" +
             "    result.rushUrl = rushUrl;\n" +
+            "    result.cookie = document.cookie;\n" +
             "    result.createOrderParams = getLoginPars();\n" +
             "    result.createOrderParams.skuId = o.mainSku;\n" +
             "    result.createOrderParams.skuIds = o.mainSku;\n" +
@@ -139,7 +141,9 @@ public class RushUtil {
                 .followSslRedirects(true)
                 .followRedirects(true)
                 .build();
-        rushClient = sOkHttpClient.newBuilder().callTimeout(500, TimeUnit.MILLISECONDS).build();
+        rushClient = sOkHttpClient.newBuilder()
+//                .addInterceptor(httpLoggingInterceptor)
+                .callTimeout(1000, TimeUnit.MILLISECONDS).build();
     }
 
 
@@ -149,10 +153,17 @@ public class RushUtil {
     public static final ExecutorService executor = Executors.newCachedThreadPool();
 
     public static Runnable startRush(JSONObject data, ValueCallback<String> callback) {
+        try {
+            data = new JSONObject(data.toString());
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
 
         String actId = data.optString("activityId");
         String skuId = data.optString("skuId");
         String rushJsVer = data.optString("rushJsVer");
+        String cookies = data.optString("cookie");
+        data.remove("cookie");
         data.remove("rushJsVer");
 
         FormBody.Builder formBuilder = new FormBody.Builder();
@@ -161,14 +172,17 @@ public class RushUtil {
             String k = keys.next();
             formBuilder.add(k, data.opt(k).toString());
         }
-        formBuilder.add("t", String.valueOf(System.currentTimeMillis()));
+        Date nowDate = new Date();
+        formBuilder.add("t", String.valueOf(nowDate.getTime()));
+        formBuilder.add("nowTime", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(nowDate));
         Request.Builder builder = new Request.Builder()
                 .post(formBuilder.build())
+                .header("Cookie", cookies)
                 .url(CREATE_ORDER_URL);
         Request request = builder.build();
 
-        long interval = getQueryInterval();
         AtomicBoolean cancel = new AtomicBoolean(false);
+        long interval = getQueryInterval();
 
         executor.execute(() -> {
             int i = 0;
@@ -179,30 +193,42 @@ public class RushUtil {
                 try {
                     Response response = call.execute();
                     if (response.isSuccessful() && response.body() != null && !call.isCanceled() && !cancel.get()) {
-                        String respStr = response.body().string();
+                        ResponseBody body = response.body();
+                        if ("text".equals(body.contentType().type())) {
+                            //返回了html可能是请求太频繁被限制了,休息久一点
+                            Log.d("sunron","请求太频繁，休息2s");
+                            SystemClock.sleep(1000);
+                            continue;
+                        }
+                        String respStr = body.string();
                         try {
                             JSONObject resp = new JSONObject(respStr);
                             boolean test = new Random().nextInt(10) < 5 && false;
 
                             Log.d("sunron", String.format("第%d次查询结果%s", curI, resp.toString()));
                             if ((test || resp.optBoolean("success", false))) {
+                                if (test) {
+                                    resp.put("orderSign", "testOrderSign");
+                                    resp.put("uid", "testUid");
+                                }
+
                                 Log.d("sunron", String.format("第%d次请求查到有货，准备去提交订单页面", curI));
                                 //成功，有余件，进入下一个提交订单页面
+
+                                //设置Cookies
                                 String key = "orderSign-" + actId + "-" + resp.optString("uid");
-                                String value = String.format("%s;expires=%s;path=/;domain=vmall.com",
-                                        resp.optString("orderSign", ""),
-                                        new Date().toGMTString());
-                                Log.d("sunron", "设置cookie=>" + key + "=" + value);
-                                CookieManager.getInstance().setCookie("vmall.com", key + "=" + value);
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                                    CookieManager.getInstance().flush();
-                                }
+                                String cookie = String.format(key + "=%s;path=/;domain=vmall.com",
+                                        resp.optString("orderSign", ""));
+                                Log.d("sunron", "设置cookie=>" + cookie);
+                                CookieManager.getInstance().setCookie("vmall.com", cookie);
+                                CookieManager.getInstance().flush();
                                 String nowTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
 
                                 String submitQuery = String.format("nowTime=%s&skuId=%s&skuIds=%s&activityId=%s&rushbuy_js_version=%s",
                                         nowTime, skuId, skuId, actId, rushJsVer);
                                 String submitUrl = SUBMIT_ORDER_URL + "?" + submitQuery;
                                 new Handler(Looper.getMainLooper()).post(() -> callback.onReceiveValue(submitUrl));
+                                return;
                             }
                         } catch (JSONException e) {
                             e.printStackTrace();

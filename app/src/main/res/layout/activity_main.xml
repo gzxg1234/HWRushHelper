@@ -61,7 +61,7 @@
                 android:id="@+id/btn_ready_rush"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="开抢"/>
+                android:text="准备开抢\n提前10秒点击"/>
 
             <CheckBox
                 android:id="@+id/cb_auto_retry"

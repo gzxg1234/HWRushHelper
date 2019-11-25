@@ -8,6 +8,7 @@ import android.util.Log;
 import android.webkit.JavascriptInterface;
 
 import com.tencent.smtt.sdk.CookieManager;
+import com.tencent.smtt.sdk.CookieSyncManager;
 import com.tencent.smtt.sdk.WebSettings;
 import com.tencent.smtt.sdk.WebView;
 
@@ -68,6 +69,7 @@ public class BaseWebView extends WebView {
         settings.setPluginState(WebSettings.PluginState.ON_DEMAND);
         settings.setLoadsImagesAutomatically(true);
 
+        CookieSyncManager.createInstance(context.getApplicationContext());
         CookieManager.getInstance().setAcceptCookie(true);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             CookieManager.getInstance().setAcceptThirdPartyCookies(this, true);
