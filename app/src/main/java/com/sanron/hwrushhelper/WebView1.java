@@ -21,6 +21,9 @@ import com.tencent.smtt.sdk.WebViewClient;
  */
 public class WebView1 extends BaseWebView {
 
+    public static WebView1 sWebView1;
+
+
     public static final String JS = " (function() {\n" +
             "      var c = 0;\n" +
             "      function xc() {\n" +
@@ -36,10 +39,9 @@ public class WebView1 extends BaseWebView {
             "          var oset = ec.util.cookie.set;\n" +
             "          ec.util.cookie.set = function(a, b, c) {\n" +
             "            oset(a, b, c);\n" +
-            "            if (a.indexOf(\"queueSign-\") >= 0) {\n" +
+            "            if (a.indexOf('queueSign') >= 0) {\n" +
             "              var x = {};\n" +
             "              x.activityId = ec.activityId + '';\n" +
-            "              x.rushJsVer = ec.rushbuy_js_version;\n" +
             "              x.cookie = document.cookie;\n" +
             "              var nn = JSON.stringify(x);\n" +
             "              native.result(nn);\n" +
@@ -64,6 +66,11 @@ public class WebView1 extends BaseWebView {
     @SuppressLint("JavascriptInterface")
     public WebView1(Context context) {
         super(BaseWebView.getFixedContext(context));
+        if(sWebView1!=null){
+            sWebView1.onPause();
+            sWebView1.destroy();
+        }
+        sWebView1 = this;
 
         getSettings().setUserAgentString("Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.36");
         addJavascriptInterface(new Object() {

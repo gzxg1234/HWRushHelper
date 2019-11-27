@@ -4,13 +4,10 @@ import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.text.Html;
 import android.text.method.ScrollingMovementMethod;
 import android.view.View;
 import android.view.WindowManager;
-import android.webkit.JavascriptInterface;
 import android.widget.Button;
 import android.widget.TextView;
 
@@ -25,25 +22,17 @@ import com.sanron.hwrushhelper.databinding.DlgLogBinding;
 import com.tencent.smtt.export.external.interfaces.WebResourceRequest;
 import com.tencent.smtt.export.external.interfaces.WebResourceResponse;
 import com.tencent.smtt.sdk.ValueCallback;
-import com.tencent.smtt.sdk.WebChromeClient;
 import com.tencent.smtt.sdk.WebSettings;
 import com.tencent.smtt.sdk.WebView;
 import com.tencent.smtt.sdk.WebViewClient;
 
-import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.BufferedInputStream;
-import java.io.ByteArrayInputStream;
-import java.io.UnsupportedEncodingException;
 import java.text.SimpleDateFormat;
-import java.util.HashMap;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MainActivity extends AppCompatActivity {
     ActivityMainBinding binding;
@@ -52,6 +41,9 @@ public class MainActivity extends AppCompatActivity {
     static WaitDialog waitDlg;
 
     JSONObject rushParams;
+
+    JSONObject cacheAddress;
+    JSONObject cacheInvoice;
 
     Runnable cancelQuery;
 
@@ -153,6 +145,7 @@ public class MainActivity extends AppCompatActivity {
         public void reset() {
             tvLog.setText("");
             tvMsg.setText("");
+            waitDlg.btnStop.setVisibility(View.VISIBLE);
             waitDlg.btnStop.setText("停止抢单");
         }
 
@@ -183,48 +176,9 @@ public class MainActivity extends AppCompatActivity {
         binding.btnSetting.setOnClickListener(v -> {
             new SettingDialog(MainActivity.this).show();
         });
-//        binding.btnGetAddress.setOnClickListener(v -> {
-//            binding.webview.evaluateJavascript("document.cookie", cookie -> {
-//                RushUtil.getAddress(cookie, value1 -> {
-//                    if (value1 == null) {
-//                        ToastOfJH.show("缓存地址失败");
-//                        return;
-//                    }
-//                    try {
-//                        JSONArray shoppingConfigList = new JSONObject(value1).optJSONArray("shoppingConfigList");
-//                        JSONObject j;
-//                        for (int i = 0; i < shoppingConfigList.length(); i++) {
-//                            if ("1".equals(shoppingConfigList.optJSONObject(i).optString("defaultFlag"))) {
-//                                j = shoppingConfigList.optJSONObject(i);
-//                                new AlertDialog.Builder(MainActivity.this)
-//                                        .setTitle("成功，默认地址数据如下")
-//                                        .setMessage(j.toString())
-//                                        .setPositiveButton("确定", (dialog, which) -> {
-//                                            dialog.dismiss();
-//                                        })
-//                                        .show();
-//                                break;
-//                            }
-//                        }
-//                    } catch (JSONException e) {
-//                        e.printStackTrace();
-//                    }
-//                });
-//            });
-//        });
         binding.btnGetTime.setOnClickListener(v -> {
             syncTime();
         });
-//        binding.etUrl.setOnEditorActionListener(new TextView.OnEditorActionListener() {
-//            @Override
-//            public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {
-//                if (actionId == EditorInfo.IME_ACTION_GO) {
-//                    binding.webview.loadUrl(binding.etUrl.getText().toString());
-//                    return false;
-//                }
-//                return false;
-//            }
-//        });
         binding.btnRefresh.setOnClickListener(v -> {
             binding.webview.reload();
         });
@@ -256,75 +210,76 @@ public class MainActivity extends AppCompatActivity {
                     String rushUrl = Html.fromHtml(obj.optString("rushUrl")).toString();
                     RushUtil.log("排队页面url=" + rushUrl);
 
-
-                    RushUtil.getAddress(obj.optString("cookie"), value1 -> {
-                        if (value1 == null) {
-                            ToastOfJH.show("获取地址失败");
-                            waitDlg.dismiss();
-                            return;
-                        }
-
-                        RushUtil.log("缓存地址列表ok");
-
-                        WebView1 s = new WebView1(MainActivity.this);
-                        s.getActId(rushUrl, new ValueCallback<String>() {
-                            @Override
-                            public void onReceiveValue(String value) {
-                                if (!waitDlg.btnStop.isShown()) {
-                                    return;
-                                }
-                                if ("error".equals(value)) {
-                                    waitDlg.dismiss();
-                                    ToastOfJH.show("基础参数获取失败，重试一下");
-                                    return;
-                                }
-
-                                try {
-                                    JSONObject r = new JSONObject(value);
-                                    String actId = r.optString("activityId");
-                                    String rushJsVer = r.optString("rushJsVer");
-                                    params.put("activityId", actId);
-                                    params.put("rushJsVer", rushJsVer);
-                                    params.put("cookie", r.optString("cookie"));
-
-                                    rushParams = params;
-
-                                    RushUtil.log(String.format("获取actId和jsVer完毕，actId=%s,jsVer=%s", actId, rushJsVer));
-                                    RushUtil.log("开始轮训是否有货步骤");
-
-                                    AlertDialog dlg = new AlertDialog.Builder(MainActivity.this).setMessage("基础参数准备完毕，确认开始轮训是否有货\n（开抢前1-2秒点）")
-                                            .setPositiveButton("确定", (dialog, which) -> {
-                                                waitDlg.setMessage("轮训是否有货。。。。");
-                                                waitDlg.show();
-                                                if (cancelQuery != null) {
-                                                    cancelQuery.run();
-                                                }
-                                                cancelQuery = RushUtil.startRush(params, new ValueCallback<String>() {
-                                                    @Override
-                                                    public void onReceiveValue(String submitUrl) {
-                                                        waitDlg.setMessage("尝试提交订单。。。。");
-                                                        RushUtil.log("准备提交,提交页面url:" + submitUrl);
-                                                        gotoSubmitOrder(submitUrl);
-                                                    }
-                                                });
-                                            })
-                                            .setOnCancelListener(dialog -> {
-                                                waitDlg.dismiss();
-                                            })
-                                            .setNegativeButton("取消", (dialog, which) -> {
-                                                dialog.cancel();
-                                            })
-                                            .create();
-                                    dlg.setCanceledOnTouchOutside(false);
-                                    dlg.show();
-
-                                } catch (JSONException e) {
-                                    e.printStackTrace();
-                                }
-
+                    RushUtil.getInvoice(obj.optString("cookie"), new ValueCallback<JSONObject>() {
+                        @Override
+                        public void onReceiveValue(JSONObject invoceData) {
+                            if (invoceData == null) {
+                                ToastOfJH.show("获取发票信息失败");
+                                waitDlg.dismiss();
+                                return;
                             }
-                        });
+                            RushUtil.getAddress(obj.optString("cookie"), address -> {
+                                if (address == null) {
+                                    ToastOfJH.show("获取地址失败");
+                                    waitDlg.dismiss();
+                                    return;
+                                }
+
+                                WebView1 s = new WebView1(MainActivity.this);
+                                s.getActId(rushUrl, new ValueCallback<String>() {
+                                    @Override
+                                    public void onReceiveValue(String value) {
+                                        if (!waitDlg.btnStop.isShown()) {
+                                            return;
+                                        }
+                                        if ("error".equals(value)) {
+                                            waitDlg.dismiss();
+                                            ToastOfJH.show("获取ActId失败，重试一下");
+                                            return;
+                                        }
+
+                                        try {
+                                            JSONObject r = new JSONObject(value);
+                                            String actId = r.optString("activityId");
+                                            params.put("activityId", actId);
+                                            params.put("cookie", r.optString("cookie"));
+
+                                            rushParams = params;
+                                            cacheInvoice = invoceData;
+                                            cacheAddress = address;
+
+                                            RushUtil.log(String.format("获取actId完毕，actId=%s", actId));
+                                            RushUtil.log("开始轮训是否有货步骤");
+
+                                            AlertDialog dlg = new AlertDialog.Builder(MainActivity.this).setMessage("基础参数准备完毕，确认开始轮训是否有货\n（开抢前1-2秒点）")
+                                                    .setPositiveButton("确定", (dialog, which) -> {
+                                                        waitDlg.setMessage("轮训是否有货。。。。");
+                                                        waitDlg.show();
+                                                        if (cancelQuery != null) {
+                                                            cancelQuery.run();
+                                                        }
+                                                        startRush(params, address, invoceData, binding.cbAutoRetry.isChecked() ? 0 : -1);
+                                                    })
+                                                    .setOnCancelListener(dialog -> {
+                                                        waitDlg.dismiss();
+                                                    })
+                                                    .setNegativeButton("取消", (dialog, which) -> {
+                                                        dialog.cancel();
+                                                    })
+                                                    .create();
+                                            dlg.setCanceledOnTouchOutside(false);
+                                            dlg.show();
+
+                                        } catch (JSONException e) {
+                                            e.printStackTrace();
+                                        }
+
+                                    }
+                                });
+                            });
+                        }
                     });
+
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
@@ -335,151 +290,52 @@ public class MainActivity extends AppCompatActivity {
         initWebView();
     }
 
-    private String rlistJson;
 
-    private void gotoSubmitOrder(String submitUrl) {
-        final AtomicBoolean x = new AtomicBoolean(false);
-        binding.webview.setWebChromeClient(new WebChromeClient() {
+    private void startRush(JSONObject params, JSONObject address, JSONObject invoice, int count) {
+        if (count >= 1) {
+            RushUtil.log("第" + count + "次重试中。。。");
+            waitDlg.setMessage("第" + count + "次重试中。。。太久没反应就关了");
+        }
+        if (cancelQuery != null) {
+            cancelQuery.run();
+        }
+        cancelQuery = RushUtil.startRush(params, address, invoice, new ValueCallback<String>() {
             @Override
-            public void onProgressChanged(WebView view, int newProgress) {
-                super.onProgressChanged(view, newProgress);
-                if (newProgress >= 50 && !x.get()) {
-                    x.set(true);
-                    view.evaluateJavascript("(function() {\n" +
-                            "    var count = 0;\n" +
-                            "\n" +
-                            "    function x() {\n" +
-                            "        if (++count >= 1000) {\n" +
-                            "            app.log(\"提交订单页面获取参数超时\");\n" +
-                            "            native.rushResult(false);\n" +
-                            "            return;\n" +
-                            "        }\n" +
-                            "        if (typeof flowType != 'undefined' && typeof ec != 'undefined' && ec.order && ec.order.checkOrder\n " +
-                            "            && ec.order.checkOrder.doSubmit && $\n" +
-                            "            && $(\"#_address\").text()) {\n" +
-                            "            var originAjax = $.ajax;\n" +
-                            "            $.ajax = function(e, t) {\n" +
-                            "                if (\"object\" == typeof e) {\n" +
-                            "                    if (e.url.indexOf('/order/create.json') > 0) {\n" +
-                            "                        app.log('发出提交订单请求,时间为'+Date.now());\n" +
-                            "                        var oS = e.success;\n" +
-                            "                        var oE = e.error;\n" +
-                            "                        e.error = function() {\n" +
-                            "                            app.log(\"提交订单失败\");\n" +
-                            "                            native.rushResult(false);\n" +
-                            "                            oE();\n" +
-                            "                        }\n" +
-                            "                        e.success = function(result) {\n" +
-                            "                            if (\"object\" != typeof e) {\n" +
-                            "                                app.log(\"提交订单失败\");\n" +
-                            "                                native.rushResult(false);\n" +
-                            "                                return;\n" +
-                            "                            }\n" +
-                            "                            // oS(result);\n" +
-                            "                            app.log(\"提交订单返回结果\" + JSON.stringify(result));\n" +
-                            "                            if (result.success) {\n" +
-                            "                                app.log(\"提交订单成功啦啦啦啦\");\n" +
-                            "                                native.rushResult(true);\n" +
-                            "                            } else {\n" +
-                            "                                app.log(\"提交订单失败\");\n" +
-                            "                                native.rushResult(false);\n" +
-                            "                            }\n" +
-                            "                        }\n" +
-                            "                    }\n" +
-                            "                }\n" +
-                            "                originAjax(e, t);\n" +
-                            "            }\n" +
-                            "\n" +
-                            "            app.log('请求提交');\n" +
-                            "            Math.random = function() {\n" +
-                            "                return 0;\n" +
-                            "            }\n" +
-                            "            ec.order.checkOrder.doSubmit();\n" +
-                            "        } else {\n" +
-                            "            setTimeout(function() {\n" +
-                            "                x();\n" +
-                            "            }, 50);\n" +
-                            "        }\n" +
-                            "    }\n" +
-                            "    x();\n" +
-                            "})()", value -> {
+            public void onReceiveValue(String r) {
+                if (!waitDlg.btnStop.isShown() || !waitDlg.isShowing()) {
+                    return;
+                }
 
-                    });
+                if (r != null) {
+                    waitDlg.dismiss();
+                    new AlertDialog.Builder(MainActivity.this)
+                            .setMessage("抢到啦！！！！！！！！！！！！！！！！！！！")
+                            .show();
+                } else {
+                    if (count >= 0) {
+                        startRush(params, address, invoice, count + 1);
+                    } else {
+                        waitDlg.dismiss();
+                        new AlertDialog.Builder(MainActivity.this)
+                                .setMessage("毛抢到！！！！！！！！！！！！！！！！！！！")
+                                .setNegativeButton("取消", null)
+                                .setCancelable(false)
+                                .setPositiveButton("重试", (dialog, which) -> {
+                                    startRush(params, address, invoice, -1);
+                                })
+                                .show();
+                    }
                 }
             }
         });
-        binding.webview.loadUrl(submitUrl);
     }
-
 
     private void initWebView() {
         WebSettings settings = binding.webview.getSettings();
 
         settings.setUserAgentString("Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.36");
 
-        binding.webview.addJavascriptInterface(new Object() {
-            @JavascriptInterface
-            public void rushResult(boolean success) {
-                new Handler(Looper.getMainLooper()).post(() -> {
-                    if (!waitDlg.btnStop.isShown()) {
-                        return;
-                    }
-
-                    if (success) {
-                        waitDlg.dismiss();
-                        new AlertDialog.Builder(MainActivity.this)
-                                .setMessage("抢到啦！！！！！！！！！！！！！！！！！！！")
-                                .show();
-                    } else {
-                        if (needRetry) {
-                            retryCount++;
-                            RushUtil.log("第" + retryCount + "次重试中。。。");
-                            waitDlg.setMessage("第" + retryCount + "次重试中。。。太久没反应就关了");
-                            waitDlg.setCanceledOnTouchOutside(false);
-                            if (rushParams != null) {
-                                waitDlg.show();
-                                if (cancelQuery != null) {
-                                    cancelQuery.run();
-                                }
-                                cancelQuery = RushUtil.startRush(rushParams, new ValueCallback<String>() {
-                                    @Override
-                                    public void onReceiveValue(String submitUrl) {
-                                        RushUtil.log("提交订单页面url:" + submitUrl);
-                                        gotoSubmitOrder(submitUrl);
-                                    }
-                                });
-                            }
-                        } else {
-                            retryCount = 0;
-                            waitDlg.dismiss();
-                            new AlertDialog.Builder(MainActivity.this)
-                                    .setMessage("毛抢到！！！！！！！！！！！！！！！！！！！")
-                                    .setNegativeButton("取消", null)
-                                    .setCancelable(false)
-                                    .setPositiveButton("重试", (dialog, which) -> {
-                                        if (rushParams != null) {
-                                            waitDlg.show();
-                                            if (cancelQuery != null) {
-                                                cancelQuery.run();
-                                            }
-                                            cancelQuery = RushUtil.startRush(rushParams, new ValueCallback<String>() {
-                                                @Override
-                                                public void onReceiveValue(String submitUrl) {
-                                                    RushUtil.log("提交订单页面url:" + submitUrl);
-                                                    gotoSubmitOrder(submitUrl);
-                                                }
-                                            });
-                                        }
-                                    })
-                                    .show();
-                        }
-                    }
-                });
-
-            }
-        }, "native");
         binding.webview.setWebViewClient(new WebViewClient() {
-
             @Nullable
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
@@ -489,24 +345,6 @@ public class MainActivity extends AppCompatActivity {
                         || request.getUrl().getLastPathSegment().endsWith(".jpeg")
                         || request.getUrl().getLastPathSegment().endsWith(".png"))) {
                     return new WebResourceResponse(null, null, null);
-                } else if (request.getUrl().getLastPathSegment() != null
-                        && request.getUrl().getLastPathSegment().contains("rlist.json")
-                        && RushUtil.addressCache != null) {
-                    try {
-                        WebResourceResponse wrr = new WebResourceResponse("application/json", "UTF-8", new BufferedInputStream(new ByteArrayInputStream(RushUtil.addressCache.getBytes("utf-8"))));
-                        wrr.setStatusCodeAndReasonPhrase(200, "");
-                        Map<String,String> map = new HashMap<>();
-                        map.put("Access-Control-Allow-Credentials","true");
-                        map.put("Access-Control-Allow-Headers","x-requested-with,CsrfToken");
-                        map.put("Access-Control-Allow-Methods","POST,GET");
-                        map.put("Access-Control-Allow-Origin","https://buy.vmall.com");
-                        map.put("Access-Control-Max-Age","3600");
-                        map.put("Cache-Control","no-store");
-                        wrr.setResponseHeaders(map);
-                        return wrr;
-                    } catch (UnsupportedEncodingException e) {
-                        e.printStackTrace();
-                    }
                 }
                 return super.shouldInterceptRequest(view, request);
             }
