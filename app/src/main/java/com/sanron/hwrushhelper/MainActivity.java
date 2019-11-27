@@ -216,7 +216,7 @@ public class MainActivity extends AppCompatActivity {
                 //获取uid并且设置为公共cookie
                 RushUtil.getEuid(MainActivity.this, euid -> {
                     if (euid == null) {
-                        ToastOfJH.show("获取euid失败，重试一下");
+                        ToastOfJH.show("获取euid失败，刷新一下页面再试试");
                         waitDlg.dismiss();
                         return;
                     }

@@ -374,31 +374,6 @@ public class RushUtil {
             e.printStackTrace();
         }
         return false;
-//        call.enqueue(new Callback() {
-//            @Override
-//            public void onFailure(Call call, IOException e) {
-//                sHandler.post(() -> {
-//                    callback.onReceiveValue(null);
-//                });
-//            }
-//
-//            @Override
-//            public void onResponse(Call call, Response response) throws IOException {
-//                if (response.isSuccessful() && response.body() != null && !call.isCanceled()) {
-//                    try {
-//                        JSONObject obj = new JSONObject(response.body().string());
-//                        if (obj.optBoolean("success", false)) {
-//                            sHandler.post(() -> {
-//                                callback.onReceiveValue("ok");
-//                            });
-//                            return;
-//                        }
-//                    } catch (Throwable e) {
-//                        e.printStackTrace();
-//                    }
-//                }
-//            }
-//        });
     }
 
 
