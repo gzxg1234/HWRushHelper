@@ -2,15 +2,14 @@ package com.sanron.hwrushhelper;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.Log;
-import android.webkit.CookieManager;
 import android.webkit.ValueCallback;
-
-import com.blankj.utilcode.util.FileIOUtils;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -29,6 +28,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Pattern;
 
 import okhttp3.CacheControl;
 import okhttp3.Call;
@@ -62,6 +62,7 @@ public class RushUtil {
         }
         Log.d("sunron", msg);
     }
+
 
     public static final String GET_RUSH_JS = "(function() {\n" +
             "    var ks = [\"uid\", \"user\", \"name\", \"ts\", \"valid\", \"sign\", \"cid\", \"wi\", \"ticket\", \"hasphone\", \"hasmail\",\n" +
@@ -401,30 +402,34 @@ public class RushUtil {
     }
 
 
-    public static void setEuid(Context context,ValueCallback<Boolean> callback) {
+    public static void getEuid(Context context, ValueCallback<String> callback) {
         RushUtil.executor.execute(() -> {
             try {
-                File app_webview = context.getDir("webview", Context.MODE_PRIVATE);
-                File cookieFile = new File(app_webview, "Cookies");
+                File appWebview = context.getDir("webview", Context.MODE_PRIVATE);
+                File cookieFile = new File(appWebview, "Cookies");
+                if (!cookieFile.exists()) {
+                    cookieFile = new File(appWebview, "/Default/Cookies");
+                }
                 if (cookieFile.exists()) {
-                    String content = FileIOUtils.readFile2String(cookieFile);
-                    if (content != null && content.contains("euid")) {
-                        int star = content.indexOf("euid");
-                        String euid = content.substring(star + 4, star + 4 + 48);
-                        RushUtil.log("提取euid=" + euid);
-                        CookieManager.getInstance().setCookie("vmall.com", "euid=" + euid + ";domain=vmall.com");
-                        CookieManager.getInstance().flush();
-                        sHandler.post(() -> {
-                            callback.onReceiveValue(true);
-                        });
-                        return;
+                    SQLiteDatabase db = SQLiteDatabase.openDatabase(cookieFile.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
+                    try (Cursor cur = db.query("cookies", new String[]{"value"}, "name=? and is_httponly=? and host_key=?",
+                            new String[]{"euid", "1", ".vmall.com"}, null, null, null)
+                    ) {
+                        if (cur != null&&cur.moveToFirst()) {
+                            String euid = cur.getString(cur.getColumnIndex("value"));
+                            RushUtil.log("提取到euid=" + euid);
+                            sHandler.post(() -> {
+                                callback.onReceiveValue(euid);
+                            });
+                            return;
+                        }
                     }
                 }
             } catch (Throwable e) {
 
             }
             sHandler.post(() -> {
-                callback.onReceiveValue(false);
+                callback.onReceiveValue(null);
             });
             return;
         });
@@ -486,7 +491,7 @@ public class RushUtil {
                                 String json = response.body().string();
                                 try {
                                     JSONObject respData = new JSONObject(json);
-                                    if ("200000".equals(respData.optString("resultCode"))&&respData.opt("data")!=null) {
+                                    if ("200000".equals(respData.optString("resultCode")) && respData.opt("data") != null) {
                                         int invoiceSubType = 1;
                                         String subTypeTitle = "个人";
                                         JSONObject data = respData.optJSONObject("data");

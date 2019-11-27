@@ -6,13 +6,12 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.webkit.JavascriptInterface;
-
-import com.tencent.smtt.export.external.interfaces.WebResourceRequest;
-import com.tencent.smtt.export.external.interfaces.WebResourceResponse;
-import com.tencent.smtt.sdk.ValueCallback;
-import com.tencent.smtt.sdk.WebChromeClient;
-import com.tencent.smtt.sdk.WebView;
-import com.tencent.smtt.sdk.WebViewClient;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
 
 /**
  * @author chenrong
@@ -111,7 +110,7 @@ public class WebView1 extends BaseWebView {
                         }
                         return super.shouldInterceptRequest(webView, webResourceRequest);
                     } else if (webResourceRequest.getUrl().getLastPathSegment().contains("createOrder")) {
-                        WebResourceResponse resourceResponse = new WebResourceResponse();
+                        WebResourceResponse resourceResponse = new WebResourceResponse("text/html","utf-8",null);
                         resourceResponse.setStatusCodeAndReasonPhrase(400, "444");
                         return resourceResponse;
                     }
