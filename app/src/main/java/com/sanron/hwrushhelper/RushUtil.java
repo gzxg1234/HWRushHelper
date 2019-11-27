@@ -197,7 +197,6 @@ public class RushUtil {
         String cookies = data.optString("cookie");
         String uid = data.optString("uid");
         data.remove("cookie");
-        data.remove("rushJsVer");
 
         Map<String, String> cookieMap = transCookie(cookies);
 
@@ -220,34 +219,34 @@ public class RushUtil {
         long interval = getQueryInterval();
 
 
-        Map<String, String> submitData = new HashMap<>();
-        submitData.put("duid", cookieMap.get("uid"));
-        submitData.put("uid", cookieMap.get("uid"));
-        submitData.put("skuIds", skuId);
-        submitData.put("quantity", String.valueOf(1));
-        submitData.put("diyPackCodeArr", "");
-        submitData.put("diyPackSkus", "");
-        submitData.put("activityId", actId);
-        submitData.put("streetId", address.optString("street"));
-        submitData.put("street", address.optString("streetName"));
-        submitData.put("districtId", address.optString("district"));
-        submitData.put("district", address.optString("districtName"));
-        submitData.put("cityId", address.optString("city"));
-        submitData.put("city", address.optString("cityName"));
-        submitData.put("provinceId", address.optString("province"));
-        submitData.put("province", address.optString("provinceName"));
-        submitData.put("consignee", address.optString("consignee"));
-        submitData.put("address", address.optString("address"));
-        submitData.put("mobile", address.optString("mobile"));
-        submitData.put("phone", "");
-        submitData.put("zipCode", "");
-        submitData.put("custName", cookieMap.get("user"));
-        submitData.put("titleType", invoInfo.optString("invoiceType"));
-        submitData.put("invoiceTitle", invoInfo.optString("invoiceContext"));
-        submitData.put("taxpayerIdentityNum", invoInfo.optString("taxpayerIdentityNum"));
-        submitData.put("orderSource", "1");
-        submitData.put("activityUid", uid);
-        submitData.put("nickName", cookieMap.get("name"));
+        final FormBody.Builder submitData = new FormBody.Builder();
+        submitData.add("duid", cookieMap.get("uid"));
+        submitData.add("uid", cookieMap.get("uid"));
+        submitData.add("skuIds", skuId);
+        submitData.add("quantity", String.valueOf(1));
+        submitData.add("diyPackCodeArr", "");
+        submitData.add("diyPackSkus", "");
+        submitData.add("activityId", actId);
+        submitData.add("streetId", address.optString("street"));
+        submitData.add("street", address.optString("streetName"));
+        submitData.add("districtId", address.optString("district"));
+        submitData.add("district", address.optString("districtName"));
+        submitData.add("cityId", address.optString("city"));
+        submitData.add("city", address.optString("cityName"));
+        submitData.add("provinceId", address.optString("province"));
+        submitData.add("province", address.optString("provinceName"));
+        submitData.add("consignee", address.optString("consignee"));
+        submitData.add("address", address.optString("address"));
+        submitData.add("mobile", address.optString("mobile"));
+        submitData.add("phone", "");
+        submitData.add("zipCode", "");
+        submitData.add("custName", cookieMap.get("user"));
+        submitData.add("titleType", invoInfo.optString("invoiceType"));
+        submitData.add("invoiceTitle", invoInfo.optString("invoiceContext"));
+        submitData.add("taxpayerIdentityNum", invoInfo.optString("taxpayerIdentityNum"));
+        submitData.add("orderSource", "1");
+        submitData.add("activityUid", uid);
+        submitData.add("nickName", cookieMap.get("name"));
 
         executor.execute(() -> {
             int i = 0;
@@ -285,7 +284,7 @@ public class RushUtil {
                                 RushUtil.log(String.format("orderSign数据--->%s=%s", orderSignKey, orderSignValue));
 
                                 String newCookie = cookies + "; " + orderSignKey + "=" + orderSignValue;
-                                submitData.put("orderSign", orderSignValue);
+                                submitData.add("orderSign", orderSignValue);
 
                                 boolean success = submit(newCookie, submitData);
                                 if (cancel.get()) {
@@ -328,14 +327,10 @@ public class RushUtil {
     }
 
 
-    public static boolean submit(String cookie, Map<String, String> submitData) {
+    public static boolean submit(String cookie, FormBody.Builder formBuilder) {
         RushUtil.log("====开始提交订单====");
-        RushUtil.log("提交订单参数:" + submitData.toString());
+        RushUtil.log("提交订单参数:" + formBuilder.build().toString());
 
-        FormBody.Builder formBuilder = new FormBody.Builder();
-        for (Map.Entry<String, String> entry : submitData.entrySet()) {
-            formBuilder.add(entry.getKey(), entry.getValue());
-        }
         Request.Builder builder = new Request.Builder()
                 .header("Cookie", cookie)
                 .post(formBuilder.build())
