@@ -30,6 +30,7 @@ import okhttp3.FormBody;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
+import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 import okhttp3.logging.HttpLoggingInterceptor;
@@ -47,7 +48,7 @@ public class RushUtil {
     public static Handler sHandler = new Handler(Looper.getMainLooper());
 
     public static void log(String msg) {
-        if(MainActivity.waitDlg!=null){
+        if (MainActivity.waitDlg != null) {
             sHandler.post(() -> {
                 MainActivity.waitDlg.appendLog(msg);
             });
@@ -159,6 +160,9 @@ public class RushUtil {
                 .callTimeout(1000, TimeUnit.MILLISECONDS).build();
     }
 
+    public static String orderSignKey = "";
+    public static String orderSignValue="";
+
 
     public static final String CREATE_ORDER_URL = "https://ord01.vmall.com/order/pwm86t/createOrder.do";
     public static final String SUBMIT_ORDER_URL = "https://buy.vmall.com/submit_order.html";
@@ -203,7 +207,7 @@ public class RushUtil {
             while (!cancel.get()) {
                 final int curI = ++i;
                 Call call = rushClient.newCall(request);
-                RushUtil.log( String.format("第%d次查询是否有货", curI));
+                RushUtil.log(String.format("第%d次查询是否有货", curI));
                 try {
                     Response response = call.execute();
                     if (response.isSuccessful() && response.body() != null && !call.isCanceled() && !cancel.get()) {
@@ -228,6 +232,7 @@ public class RushUtil {
                                 }
 
                                 RushUtil.log(String.format("第%d次请求查到有货，准备去提交订单页面", curI));
+                                RushUtil.log("查到有货的时间为="+System.currentTimeMillis());
                                 //成功，有余件，进入下一个提交订单页面
 
                                 //设置Cookies
@@ -260,6 +265,48 @@ public class RushUtil {
         return () -> cancel.set(true);
     }
 
+    public static String addressCache;
+
+    public static void getAddress(String cookie, ValueCallback<String> callback) {
+        Request.Builder builder = new Request.Builder()
+                .header("Cookie", cookie)
+                .post(RequestBody.create(null, ""))
+                .url("https://addr.vmall.com/address/rlist.json");
+        Request request = builder.build();
+        sOkHttpClient.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                sHandler.post(() -> {
+                    callback.onReceiveValue(null);
+                });
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                if (response.isSuccessful() && response.body() != null && !call.isCanceled()) {
+                    String json = response.body().string();
+                    try {
+                        JSONObject obj = new JSONObject(json);
+                        if ("32000".equals(obj.optString("code"))
+                                && obj.optJSONArray("shoppingConfigList") != null
+                                && obj.optJSONArray("shoppingConfigList").length() > 0) {
+                            addressCache = json;
+                            sHandler.post(() -> {
+                                callback.onReceiveValue(addressCache);
+                            });
+                            return;
+                        }
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+
+                }
+                sHandler.post(() -> {
+                    callback.onReceiveValue(null);
+                });
+            }
+        });
+    }
 
     public static void getHwTime(ValueCallback<Date> callback) {
         String url = "https://www.vmall.com/system/getSysDate.json";

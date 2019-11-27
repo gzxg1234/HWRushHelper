@@ -30,11 +30,17 @@ import com.tencent.smtt.sdk.WebSettings;
 import com.tencent.smtt.sdk.WebView;
 import com.tencent.smtt.sdk.WebViewClient;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.BufferedInputStream;
+import java.io.ByteArrayInputStream;
+import java.io.UnsupportedEncodingException;
 import java.text.SimpleDateFormat;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -177,6 +183,35 @@ public class MainActivity extends AppCompatActivity {
         binding.btnSetting.setOnClickListener(v -> {
             new SettingDialog(MainActivity.this).show();
         });
+//        binding.btnGetAddress.setOnClickListener(v -> {
+//            binding.webview.evaluateJavascript("document.cookie", cookie -> {
+//                RushUtil.getAddress(cookie, value1 -> {
+//                    if (value1 == null) {
+//                        ToastOfJH.show("缓存地址失败");
+//                        return;
+//                    }
+//                    try {
+//                        JSONArray shoppingConfigList = new JSONObject(value1).optJSONArray("shoppingConfigList");
+//                        JSONObject j;
+//                        for (int i = 0; i < shoppingConfigList.length(); i++) {
+//                            if ("1".equals(shoppingConfigList.optJSONObject(i).optString("defaultFlag"))) {
+//                                j = shoppingConfigList.optJSONObject(i);
+//                                new AlertDialog.Builder(MainActivity.this)
+//                                        .setTitle("成功，默认地址数据如下")
+//                                        .setMessage(j.toString())
+//                                        .setPositiveButton("确定", (dialog, which) -> {
+//                                            dialog.dismiss();
+//                                        })
+//                                        .show();
+//                                break;
+//                            }
+//                        }
+//                    } catch (JSONException e) {
+//                        e.printStackTrace();
+//                    }
+//                });
+//            });
+//        });
         binding.btnGetTime.setOnClickListener(v -> {
             syncTime();
         });
@@ -221,63 +256,74 @@ public class MainActivity extends AppCompatActivity {
                     String rushUrl = Html.fromHtml(obj.optString("rushUrl")).toString();
                     RushUtil.log("排队页面url=" + rushUrl);
 
-                    WebView1 s = new WebView1(MainActivity.this);
-                    s.getActId(rushUrl, new ValueCallback<String>() {
-                        @Override
-                        public void onReceiveValue(String value) {
-                            if(!waitDlg.btnStop.isShown()){
-                                return;
-                            }
-                            if ("error".equals(value)) {
-                                waitDlg.dismiss();
-                                ToastOfJH.show("基础参数获取失败，重试一下");
-                                return;
-                            }
 
-                            try {
-                                JSONObject r = new JSONObject(value);
-                                String actId = r.optString("activityId");
-                                String rushJsVer = r.optString("rushJsVer");
-                                params.put("activityId", actId);
-                                params.put("rushJsVer", rushJsVer);
-                                params.put("cookie", r.optString("cookie"));
-
-                                rushParams = params;
-
-                                RushUtil.log(String.format("获取actId和jsVer完毕，actId=%s,jsVer=%s", actId, rushJsVer));
-                                RushUtil.log("开始轮训是否有货步骤");
-
-                                AlertDialog dlg = new AlertDialog.Builder(MainActivity.this).setMessage("基础参数准备完毕，确认开始轮训是否有货\n（开抢前1-2秒点）")
-                                        .setPositiveButton("确定", (dialog, which) -> {
-                                            waitDlg.setMessage("轮训是否有货。。。。");
-                                            waitDlg.show();
-                                            if (cancelQuery != null) {
-                                                cancelQuery.run();
-                                            }
-                                            cancelQuery = RushUtil.startRush(params, new ValueCallback<String>() {
-                                                @Override
-                                                public void onReceiveValue(String submitUrl) {
-                                                    waitDlg.setMessage("提交订单。。。。");
-                                                    RushUtil.log("开始进入提交步骤，页面url:" + submitUrl);
-                                                    gotoSubmitOrder(submitUrl);
-                                                }
-                                            });
-                                        })
-                                        .setOnCancelListener(dialog -> {
-                                            waitDlg.dismiss();
-                                        })
-                                        .setNegativeButton("取消", (dialog, which) -> {
-                                            dialog.cancel();
-                                        })
-                                        .create();
-                                dlg.setCanceledOnTouchOutside(false);
-                                dlg.show();
-
-                            } catch (JSONException e) {
-                                e.printStackTrace();
-                            }
-
+                    RushUtil.getAddress(obj.optString("cookie"), value1 -> {
+                        if (value1 == null) {
+                            ToastOfJH.show("获取地址失败");
+                            waitDlg.dismiss();
+                            return;
                         }
+
+                        RushUtil.log("缓存地址列表ok");
+
+                        WebView1 s = new WebView1(MainActivity.this);
+                        s.getActId(rushUrl, new ValueCallback<String>() {
+                            @Override
+                            public void onReceiveValue(String value) {
+                                if (!waitDlg.btnStop.isShown()) {
+                                    return;
+                                }
+                                if ("error".equals(value)) {
+                                    waitDlg.dismiss();
+                                    ToastOfJH.show("基础参数获取失败，重试一下");
+                                    return;
+                                }
+
+                                try {
+                                    JSONObject r = new JSONObject(value);
+                                    String actId = r.optString("activityId");
+                                    String rushJsVer = r.optString("rushJsVer");
+                                    params.put("activityId", actId);
+                                    params.put("rushJsVer", rushJsVer);
+                                    params.put("cookie", r.optString("cookie"));
+
+                                    rushParams = params;
+
+                                    RushUtil.log(String.format("获取actId和jsVer完毕，actId=%s,jsVer=%s", actId, rushJsVer));
+                                    RushUtil.log("开始轮训是否有货步骤");
+
+                                    AlertDialog dlg = new AlertDialog.Builder(MainActivity.this).setMessage("基础参数准备完毕，确认开始轮训是否有货\n（开抢前1-2秒点）")
+                                            .setPositiveButton("确定", (dialog, which) -> {
+                                                waitDlg.setMessage("轮训是否有货。。。。");
+                                                waitDlg.show();
+                                                if (cancelQuery != null) {
+                                                    cancelQuery.run();
+                                                }
+                                                cancelQuery = RushUtil.startRush(params, new ValueCallback<String>() {
+                                                    @Override
+                                                    public void onReceiveValue(String submitUrl) {
+                                                        waitDlg.setMessage("尝试提交订单。。。。");
+                                                        RushUtil.log("准备提交,提交页面url:" + submitUrl);
+                                                        gotoSubmitOrder(submitUrl);
+                                                    }
+                                                });
+                                            })
+                                            .setOnCancelListener(dialog -> {
+                                                waitDlg.dismiss();
+                                            })
+                                            .setNegativeButton("取消", (dialog, which) -> {
+                                                dialog.cancel();
+                                            })
+                                            .create();
+                                    dlg.setCanceledOnTouchOutside(false);
+                                    dlg.show();
+
+                                } catch (JSONException e) {
+                                    e.printStackTrace();
+                                }
+
+                            }
+                        });
                     });
                 } catch (JSONException e) {
                     e.printStackTrace();
@@ -303,7 +349,7 @@ public class MainActivity extends AppCompatActivity {
                             "    var count = 0;\n" +
                             "\n" +
                             "    function x() {\n" +
-                            "        if (++count >= 100) {\n" +
+                            "        if (++count >= 1000) {\n" +
                             "            app.log(\"提交订单页面获取参数超时\");\n" +
                             "            native.rushResult(false);\n" +
                             "            return;\n" +
@@ -315,7 +361,7 @@ public class MainActivity extends AppCompatActivity {
                             "            $.ajax = function(e, t) {\n" +
                             "                if (\"object\" == typeof e) {\n" +
                             "                    if (e.url.indexOf('/order/create.json') > 0) {\n" +
-                            "                        app.log('拦截到了提交订单请求');\n" +
+                            "                        app.log('发出提交订单请求,时间为'+Date.now());\n" +
                             "                        var oS = e.success;\n" +
                             "                        var oE = e.error;\n" +
                             "                        e.error = function() {\n" +
@@ -443,6 +489,24 @@ public class MainActivity extends AppCompatActivity {
                         || request.getUrl().getLastPathSegment().endsWith(".jpeg")
                         || request.getUrl().getLastPathSegment().endsWith(".png"))) {
                     return new WebResourceResponse(null, null, null);
+                } else if (request.getUrl().getLastPathSegment() != null
+                        && request.getUrl().getLastPathSegment().contains("rlist.json")
+                        && RushUtil.addressCache != null) {
+                    try {
+                        WebResourceResponse wrr = new WebResourceResponse("application/json", "UTF-8", new BufferedInputStream(new ByteArrayInputStream(RushUtil.addressCache.getBytes("utf-8"))));
+                        wrr.setStatusCodeAndReasonPhrase(200, "");
+                        Map<String,String> map = new HashMap<>();
+                        map.put("Access-Control-Allow-Credentials","true");
+                        map.put("Access-Control-Allow-Headers","x-requested-with,CsrfToken");
+                        map.put("Access-Control-Allow-Methods","POST,GET");
+                        map.put("Access-Control-Allow-Origin","https://buy.vmall.com");
+                        map.put("Access-Control-Max-Age","3600");
+                        map.put("Cache-Control","no-store");
+                        wrr.setResponseHeaders(map);
+                        return wrr;
+                    } catch (UnsupportedEncodingException e) {
+                        e.printStackTrace();
+                    }
                 }
                 return super.shouldInterceptRequest(view, request);
             }
