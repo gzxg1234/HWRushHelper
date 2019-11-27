@@ -5,7 +5,6 @@ import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
-import android.util.Log;
 import android.webkit.JavascriptInterface;
 
 import com.tencent.smtt.export.external.interfaces.WebResourceRequest;
@@ -107,15 +106,13 @@ public class WebView1 extends BaseWebView {
                 if (webResourceRequest.getUrl().getLastPathSegment() != null) {
                     if (webResourceRequest.getUrl().getLastPathSegment().contains("isqueue.json")) {
                         int count = 0;
-                        Log.d("sunron","setOk="+setOk);
                         while (!setOk && count++ <100) {
                             SystemClock.sleep(100);
                         }
-                        Log.d("sunron","setOk ok");
                         return super.shouldInterceptRequest(webView, webResourceRequest);
                     } else if (webResourceRequest.getUrl().getLastPathSegment().contains("createOrder")) {
                         WebResourceResponse resourceResponse = new WebResourceResponse();
-                        resourceResponse.setStatusCodeAndReasonPhrase(400, "");
+                        resourceResponse.setStatusCodeAndReasonPhrase(400, "444");
                         return resourceResponse;
                     }
                 }

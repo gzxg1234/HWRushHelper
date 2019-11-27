@@ -11,12 +11,6 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
 
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.app.AppCompatDialog;
-import androidx.databinding.DataBindingUtil;
-
 import com.sanron.hwrushhelper.databinding.ActivityMainBinding;
 import com.sanron.hwrushhelper.databinding.DlgLogBinding;
 import com.tencent.smtt.export.external.interfaces.WebResourceRequest;
@@ -33,6 +27,12 @@ import java.text.SimpleDateFormat;
 import java.util.Locale;
 import java.util.Timer;
 import java.util.TimerTask;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDialog;
+import androidx.databinding.DataBindingUtil;
 
 public class MainActivity extends AppCompatActivity {
     ActivityMainBinding binding;
@@ -209,82 +209,107 @@ public class MainActivity extends AppCompatActivity {
                     JSONObject params = obj.optJSONObject("createOrderParams");
                     String rushUrl = Html.fromHtml(obj.optString("rushUrl")).toString();
                     RushUtil.log("排队页面url=" + rushUrl);
+                    String cookieStr = obj.optString("cookie");
+                    if (!cookieStr.contains("uid=")) {
+                        RushUtil.sHandler.post(() -> {
+                            ToastOfJH.show("没有登录账号");
+                            waitDlg.dismiss();
+                        });
+                        return;
+                    }
 
-                    RushUtil.getInvoice(obj.optString("cookie"), new ValueCallback<JSONObject>() {
-                        @Override
-                        public void onReceiveValue(JSONObject invoceData) {
-                            if (invoceData == null) {
-                                ToastOfJH.show("获取发票信息失败");
-                                waitDlg.dismiss();
-                                return;
-                            }
-                            RushUtil.getAddress(obj.optString("cookie"), address -> {
-                                if (address == null) {
-                                    ToastOfJH.show("获取地址失败");
+                    //获取uid并且设置为公共cookie
+                    RushUtil.setEuid(MainActivity.this, b -> {
+                        if (!b) {
+                            ToastOfJH.show("获取euid失败，重试一下");
+                            waitDlg.dismiss();
+                            return;
+                        }
+
+                        //获取发票
+                        RushUtil.getInvoice(obj.optString("cookie"), new ValueCallback<JSONObject>() {
+                            @Override
+                            public void onReceiveValue(JSONObject invoceData) {
+                                if (invoceData == null) {
+                                    ToastOfJH.show("获取发票信息失败");
                                     waitDlg.dismiss();
                                     return;
                                 }
+                                RushUtil.log("发票数据:"+invoceData.toString());
 
-                                WebView1 s = new WebView1(MainActivity.this);
-                                s.getActId(rushUrl, new ValueCallback<String>() {
-                                    @Override
-                                    public void onReceiveValue(String value) {
-                                        if (!waitDlg.btnStop.isShown()) {
-                                            return;
-                                        }
-                                        if ("error".equals(value)) {
-                                            waitDlg.dismiss();
-                                            ToastOfJH.show("获取ActId失败，重试一下");
-                                            return;
-                                        }
-
-                                        try {
-                                            JSONObject r = new JSONObject(value);
-                                            String actId = r.optString("activityId");
-                                            params.put("activityId", actId);
-                                            params.put("cookie", r.optString("cookie"));
-
-                                            rushParams = params;
-                                            cacheInvoice = invoceData;
-                                            cacheAddress = address;
-
-                                            RushUtil.log(String.format("获取actId完毕，actId=%s", actId));
-                                            RushUtil.log("开始轮训是否有货步骤");
-
-                                            AlertDialog dlg = new AlertDialog.Builder(MainActivity.this).setMessage("基础参数准备完毕，确认开始轮训是否有货\n（开抢前1-2秒点）")
-                                                    .setPositiveButton("确定", (dialog, which) -> {
-                                                        waitDlg.setMessage("轮训是否有货。。。。");
-                                                        waitDlg.show();
-                                                        if (cancelQuery != null) {
-                                                            cancelQuery.run();
-                                                        }
-                                                        startRush(params, address, invoceData, binding.cbAutoRetry.isChecked() ? 0 : -1);
-                                                    })
-                                                    .setOnCancelListener(dialog -> {
-                                                        waitDlg.dismiss();
-                                                    })
-                                                    .setNegativeButton("取消", (dialog, which) -> {
-                                                        dialog.cancel();
-                                                    })
-                                                    .create();
-                                            dlg.setCanceledOnTouchOutside(false);
-                                            dlg.show();
-
-                                        } catch (JSONException e) {
-                                            e.printStackTrace();
-                                        }
-
+                                //获取默认地址
+                                RushUtil.getAddress(obj.optString("cookie"), address -> {
+                                    if (address == null) {
+                                        ToastOfJH.show("获取地址失败");
+                                        waitDlg.dismiss();
+                                        return;
                                     }
-                                });
-                            });
-                        }
-                    });
 
+                                    RushUtil.log("默认地址数据:"+address.toString());
+
+                                    WebView1 s = new WebView1(MainActivity.this);
+                                    s.getActId(rushUrl, new ValueCallback<String>() {
+                                        @Override
+                                        public void onReceiveValue(String value) {
+                                            if (!waitDlg.btnStop.isShown()) {
+                                                return;
+                                            }
+                                            if ("error".equals(value)) {
+                                                waitDlg.dismiss();
+                                                ToastOfJH.show("获取ActId失败，重试一下");
+                                                return;
+                                            }
+
+                                            try {
+                                                JSONObject r = new JSONObject(value);
+                                                String actId = r.optString("activityId");
+                                                params.put("activityId", actId);
+                                                params.put("cookie", r.optString("cookie"));
+
+                                                rushParams = params;
+                                                cacheInvoice = invoceData;
+                                                cacheAddress = address;
+
+                                                RushUtil.log(String.format("获取actId完毕，actId=%s", actId));
+                                                RushUtil.log("开始轮训是否有货步骤");
+
+                                                AlertDialog dlg = new AlertDialog.Builder(MainActivity.this).setMessage("基础参数准备完毕，确认开始轮训是否有货\n（开抢前1-2秒点）")
+                                                        .setPositiveButton("确定", (dialog, which) -> {
+                                                            waitDlg.setMessage("轮训是否有货。。。。");
+                                                            waitDlg.show();
+                                                            if (cancelQuery != null) {
+                                                                cancelQuery.run();
+                                                            }
+                                                            startRush(params, address, invoceData, binding.cbAutoRetry.isChecked() ? 0 : -1);
+                                                        })
+                                                        .setOnCancelListener(dialog -> {
+                                                            waitDlg.setMessage("已经停止");
+                                                            waitDlg.btnStop.setVisibility(View.GONE);
+                                                        })
+                                                        .setNegativeButton("取消", (dialog, which) -> {
+                                                            dialog.cancel();
+                                                        })
+                                                        .create();
+                                                dlg.setCanceledOnTouchOutside(false);
+                                                dlg.show();
+
+                                            } catch (JSONException e) {
+                                                e.printStackTrace();
+                                            }
+
+                                        }
+                                    });
+                                });
+                            }
+                        });
+                    });
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
 
             });
+
+
         });
 
         initWebView();

@@ -7,12 +7,16 @@ import android.os.Looper;
 import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.Log;
+import android.webkit.CookieManager;
 import android.webkit.ValueCallback;
+
+import com.blankj.utilcode.util.FileIOUtils;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.File;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -292,9 +296,13 @@ public class RushUtil {
                                 }
                                 RushUtil.log("订单提交结果:" + success);
                                 if (success) {
-                                    callback.onReceiveValue("true");
+                                    sHandler.post(() -> {
+                                        callback.onReceiveValue("true");
+                                    });
                                 } else {
-                                    callback.onReceiveValue(null);
+                                    sHandler.post(() -> {
+                                        callback.onReceiveValue(null);
+                                    });
                                 }
                                 return;
 //
@@ -329,17 +337,29 @@ public class RushUtil {
 
     public static boolean submit(String cookie, FormBody.Builder formBuilder) {
         RushUtil.log("====开始提交订单====");
-        RushUtil.log("提交订单参数:" + formBuilder.build().toString());
+        final FormBody formBody = formBuilder.build();
+        executor.execute(() -> {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < formBody.size(); i++) {
+                sb.append(formBody.name(i)).append("=").append(formBody.value(i)).append(", ");
+            }
+            RushUtil.log("提交订单参数:" + sb.toString());
+        });
 
         Request.Builder builder = new Request.Builder()
                 .header("Cookie", cookie)
-                .post(formBuilder.build())
+                .header("Sec-Fetch-Mode", "cors")
+                .header("X-Requested-With", "XMLHttpRequest")
+                .header("Sec-Fetch-Site", "same-origin")
+                .header("Origin", "https://buy.vmall.com")
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36")
+                .post(formBody)
                 .url("https://buy.vmall.com/order/create.json");
         Call call = sOkHttpClient.newCall(builder.build());
         Response response = null;
         try {
             response = call.execute();
-            if (response.isSuccessful() && response.body() != null && !call.isCanceled()) {
+            if (response.isSuccessful() && response.body() != null) {
                 try {
                     JSONObject obj = new JSONObject(response.body().string());
                     if (obj.optBoolean("success", false)) {
@@ -380,7 +400,35 @@ public class RushUtil {
 //        });
     }
 
-    public static String addressCache;
+
+    public static void setEuid(Context context,ValueCallback<Boolean> callback) {
+        RushUtil.executor.execute(() -> {
+            try {
+                File app_webview = context.getDir("webview", Context.MODE_PRIVATE);
+                File cookieFile = new File(app_webview, "Cookies");
+                if (cookieFile.exists()) {
+                    String content = FileIOUtils.readFile2String(cookieFile);
+                    if (content != null && content.contains("euid")) {
+                        int star = content.indexOf("euid");
+                        String euid = content.substring(star + 4, star + 4 + 48);
+                        RushUtil.log("提取euid=" + euid);
+                        CookieManager.getInstance().setCookie("vmall.com", "euid=" + euid + ";domain=vmall.com");
+                        CookieManager.getInstance().flush();
+                        sHandler.post(() -> {
+                            callback.onReceiveValue(true);
+                        });
+                        return;
+                    }
+                }
+            } catch (Throwable e) {
+
+            }
+            sHandler.post(() -> {
+                callback.onReceiveValue(false);
+            });
+            return;
+        });
+    }
 
     public static void getInvoice(String cookie, ValueCallback<JSONObject> callback) {
         Map<String, String> cookieMap = transCookie(cookie);
@@ -415,14 +463,10 @@ public class RushUtil {
                             .header("Accept", "application/json, text/javascript, */*; q=0.01")
                             .header("Accept-Encoding", "gzip, deflate, br")
                             .header("Accept-Language", "zh-CN,zh;q=0.9")
-                            .header("Cache-Control", "no-cache")
-                            .header("Connection", "keep-alive")
                             .header("Cookie", newCookie.toString())
                             .header("CsrfToken", cookieMap.get("CSRF-TOKEN"))
-                            .header("Host", "openapi.vmall.com")
-                            .header("Origin", "https://buy.vmall.com")
-                            .header("Pragma", "no-cache")
-                            .header("Referer", "https://buy.vmall.com/submit_order.html?nowTime=2019-11-27%2013:47:30&skuId=10086239677333&skuIds=10086239677333&activityId=860120191122950&backUrl=https%3A%2F%2Fwww.vmall.com%2Fproduct%2F10086831441169.html%2310086239677333&rushbuy_js_version=0536f1be-fa18-4932-88de-78bf4b72c9f8&backto=https%3A%2F%2Fwww.vmall.com%2Fproduct%2F10086831441169.html%2310086239677333")
+                            .header("Sec-Fetch-Mode", "cors")
+                            .header("Sec-Fetch-Site", "same-site")
                             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.80 Safari/537.36")
                             .get()
                             .url("https://openapi.vmall.com/uc/invoice/queryInvoiceList.json?userId=" + cookieMap.get("uid"));
@@ -441,11 +485,12 @@ public class RushUtil {
                             if (response.isSuccessful() && response.body() != null && !call.isCanceled()) {
                                 String json = response.body().string();
                                 try {
-                                    JSONObject obj = new JSONObject(json);
-                                    if ("200000".equals(obj.optString("resultCode"))) {
+                                    JSONObject respData = new JSONObject(json);
+                                    if ("200000".equals(respData.optString("resultCode"))&&respData.opt("data")!=null) {
                                         int invoiceSubType = 1;
                                         String subTypeTitle = "个人";
-                                        JSONArray arr = obj.optJSONArray("invoiceInfoVOList");
+                                        JSONObject data = respData.optJSONObject("data");
+                                        JSONArray arr = data.optJSONArray("invoiceInfoVOList");
                                         JSONObject electronicInvoice = new JSONObject();
                                         if (arr != null && arr.length() > 0) {
                                             for (int i = 0; i < arr.length(); i++) {
@@ -468,7 +513,7 @@ public class RushUtil {
                                                     }
                                                 }
                                             }
-                                            if ("1".equals(obj.optString("lastInvoiceTitleType"))) {
+                                            if ("1".equals(data.optString("lastInvoiceTitleType"))) {
                                                 if (!TextUtils.isEmpty(electronicInvoice.optString("personalTitle"))) {
                                                     subTypeTitle = electronicInvoice.optString("personalTitle");
                                                 }
@@ -491,6 +536,7 @@ public class RushUtil {
                                         sHandler.post(() -> {
                                             callback.onReceiveValue(result);
                                         });
+                                        return;
                                     }
                                 } catch (JSONException e) {
                                     e.printStackTrace();
