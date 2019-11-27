@@ -19,9 +19,9 @@ public class WebView1 extends BaseWebView {
 
     public static final String JS = " (function() {\n" +
             "      var c = 0;\n" +
-            "\n" +
             "      function xc() {\n" +
-            "        if (c++ >= 100) {\n" +
+            "        app.log('尝试获取基础参数'+(++c));\n" +
+            "        if (c>= 100) {\n" +
             "          native.result('error');\n" +
             "          return;\n" +
             "        }\n" +
@@ -29,7 +29,7 @@ public class WebView1 extends BaseWebView {
             "          ec.util &&\n" +
             "          ec.util.cookie &&\n" +
             "          ec.util.cookie.set) {\n" +
-            "          app.log('xllll');\n" +
+            "          app.log('获取基础参数完成');\n" +
             "          var oset = ec.util.cookie.set;\n" +
             "          ec.util.cookie.set = function(a, b, c) {\n" +
             "            oset(a, b, c);\n" +
@@ -43,7 +43,6 @@ public class WebView1 extends BaseWebView {
             "            }\n" +
             "          }\n" +
             "        } else {\n" +
-            "          app.log('next');\n" +
             "          setTimeout(function() {\n" +
             "            xc();\n" +
             "          }, 50);\n" +
@@ -76,7 +75,7 @@ public class WebView1 extends BaseWebView {
             @Override
             public void onProgressChanged(WebView webView, int i) {
                 super.onProgressChanged(webView, i);
-                if (i > 10 && !x) {
+                if (i > 10&& !x) {
                     x = true;
                     webView.evaluateJavascript(JS, null);
                 }

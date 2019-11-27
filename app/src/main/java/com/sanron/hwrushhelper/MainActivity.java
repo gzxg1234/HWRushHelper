@@ -1,15 +1,20 @@
 package com.sanron.hwrushhelper;
 
 import android.app.AlertDialog;
-import android.app.ProgressDialog;
+import android.app.Dialog;
 import android.content.Context;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.Html;
-import android.util.Log;
+import android.text.method.ScrollingMovementMethod;
+import android.view.View;
+import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
+import android.widget.Button;
+import android.widget.TextView;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDialog;
@@ -38,7 +43,7 @@ public class MainActivity extends AppCompatActivity {
     ActivityMainBinding binding;
 
     //获取抢购页面的跳转地址
-    ProgressDialog waitDlg;
+    static WaitDialog waitDlg;
 
     JSONObject rushParams;
 
@@ -53,6 +58,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         binding = DataBindingUtil.setContentView(this, R.layout.activity_main);
         initView();
         initUrl();
@@ -109,9 +115,56 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    public static class WaitDialog extends Dialog {
+
+        TextView tvMsg;
+        TextView tvLog;
+        Button btnCancel, btnStop;
+
+        public WaitDialog(@NonNull Context context) {
+            super(context);
+            setContentView(R.layout.dlg_wait);
+
+            WindowManager.LayoutParams layoutParams = getWindow().getAttributes();
+            layoutParams.width = WindowManager.LayoutParams.MATCH_PARENT;
+            getWindow().setAttributes(layoutParams);
+
+            tvLog = findViewById(R.id.tv_log);
+            tvMsg = findViewById(R.id.tv_msg);
+            btnCancel = findViewById(R.id.btn_cancel);
+            btnStop = findViewById(R.id.btn_stop);
+            btnCancel.setOnClickListener(v -> {
+                dismiss();
+            });
+            tvLog.setMovementMethod(ScrollingMovementMethod.getInstance());
+        }
+
+
+        public void setMessage(String msg) {
+            tvMsg.setText(msg);
+        }
+
+        public void reset() {
+            tvLog.setText("");
+            tvMsg.setText("");
+            waitDlg.btnStop.setText("停止抢单");
+        }
+
+        public void appendLog(String log) {
+            if (tvLog.length() > 0) {
+                tvLog.append("\n\n");
+            }
+            tvLog.append(log);
+            int offset = tvLog.getLineCount() * tvLog.getLineHeight();
+            if (offset > tvLog.getHeight()) {
+                tvLog.scrollTo(0, offset - tvLog.getHeight());
+            }
+        }
+    }
+
 
     private void initView() {
-        waitDlg = new ProgressDialog(MainActivity.this);
+        waitDlg = new WaitDialog(MainActivity.this);
         waitDlg.setCanceledOnTouchOutside(false);
         binding.btnMate30.setOnClickListener(v -> {
             binding.webview.clearHistory();
@@ -141,13 +194,22 @@ public class MainActivity extends AppCompatActivity {
             binding.webview.reload();
         });
 
-        waitDlg.setOnCancelListener(dialog -> {
+        waitDlg.setOnDismissListener(dialog -> {
             if (cancelQuery != null) {
                 cancelQuery.run();
             }
             needRetry = false;
         });
+        waitDlg.btnStop.setOnClickListener(v -> {
+            if (cancelQuery != null) {
+                cancelQuery.run();
+            }
+            needRetry = false;
+            waitDlg.setMessage("已经停止");
+            waitDlg.btnStop.setVisibility(View.GONE);
+        });
         binding.btnReadyRush.setOnClickListener(v -> {
+            waitDlg.reset();
             needRetry = binding.cbAutoRetry.isChecked();
             retryCount = 0;
             waitDlg.setMessage("获取基础参数。。。太久没反应关了");
@@ -157,12 +219,15 @@ public class MainActivity extends AppCompatActivity {
                     JSONObject obj = new JSONObject(value);
                     JSONObject params = obj.optJSONObject("createOrderParams");
                     String rushUrl = Html.fromHtml(obj.optString("rushUrl")).toString();
-                    Log.d("sunron", "排队页面url=" + rushUrl);
+                    RushUtil.log("排队页面url=" + rushUrl);
 
                     WebView1 s = new WebView1(MainActivity.this);
                     s.getActId(rushUrl, new ValueCallback<String>() {
                         @Override
                         public void onReceiveValue(String value) {
+                            if(!waitDlg.btnStop.isShown()){
+                                return;
+                            }
                             if ("error".equals(value)) {
                                 waitDlg.dismiss();
                                 ToastOfJH.show("基础参数获取失败，重试一下");
@@ -179,10 +244,9 @@ public class MainActivity extends AppCompatActivity {
 
                                 rushParams = params;
 
-                                Log.d("sunron", String.format("获取actId和jsVer完毕，actId=%s,jsVer=%s", actId, rushJsVer));
-                                Log.d("sunron", "开始轮训是否有货步骤");
+                                RushUtil.log(String.format("获取actId和jsVer完毕，actId=%s,jsVer=%s", actId, rushJsVer));
+                                RushUtil.log("开始轮训是否有货步骤");
 
-                                waitDlg.dismiss();
                                 AlertDialog dlg = new AlertDialog.Builder(MainActivity.this).setMessage("基础参数准备完毕，确认开始轮训是否有货\n（开抢前1-2秒点）")
                                         .setPositiveButton("确定", (dialog, which) -> {
                                             waitDlg.setMessage("轮训是否有货。。。。");
@@ -194,13 +258,16 @@ public class MainActivity extends AppCompatActivity {
                                                 @Override
                                                 public void onReceiveValue(String submitUrl) {
                                                     waitDlg.setMessage("提交订单。。。。");
-                                                    Log.d("sunron", "开始进入提交步骤，页面url:" + submitUrl);
+                                                    RushUtil.log("开始进入提交步骤，页面url:" + submitUrl);
                                                     gotoSubmitOrder(submitUrl);
                                                 }
                                             });
                                         })
+                                        .setOnCancelListener(dialog -> {
+                                            waitDlg.dismiss();
+                                        })
                                         .setNegativeButton("取消", (dialog, which) -> {
-                                            dialog.dismiss();
+                                            dialog.cancel();
                                         })
                                         .create();
                                 dlg.setCanceledOnTouchOutside(false);
@@ -241,15 +308,14 @@ public class MainActivity extends AppCompatActivity {
                             "            native.rushResult(false);\n" +
                             "            return;\n" +
                             "        }\n" +
-                            "        if (typeof flowType != 'undefined' && typeof ec != 'undefined' && ec.order && ec.order.checkOrder && ec.order\n" +
-                            "            .checkOrder.doSubmit &&\n" +
-                            "            $ && $(\"#_address\").text()) {\n" +
+                            "        if (typeof flowType != 'undefined' && typeof ec != 'undefined' && ec.order && ec.order.checkOrder\n " +
+                            "            && ec.order.checkOrder.doSubmit && $\n" +
+                            "            && $(\"#_address\").text()) {\n" +
                             "            var originAjax = $.ajax;\n" +
                             "            $.ajax = function(e, t) {\n" +
                             "                if (\"object\" == typeof e) {\n" +
-                            "                    app.log('e = ' + JSON.stringify(e));\n" +
                             "                    if (e.url.indexOf('/order/create.json') > 0) {\n" +
-                            "                        app.log('拦截create.json请求');\n" +
+                            "                        app.log('拦截到了提交订单请求');\n" +
                             "                        var oS = e.success;\n" +
                             "                        var oE = e.error;\n" +
                             "                        e.error = function() {\n" +
@@ -264,7 +330,7 @@ public class MainActivity extends AppCompatActivity {
                             "                                return;\n" +
                             "                            }\n" +
                             "                            // oS(result);\n" +
-                            "                            app.log(\"create.json接口结果\" + JSON.stringify(result));\n" +
+                            "                            app.log(\"提交订单返回结果\" + JSON.stringify(result));\n" +
                             "                            if (result.success) {\n" +
                             "                                app.log(\"提交订单成功啦啦啦啦\");\n" +
                             "                                native.rushResult(true);\n" +
@@ -278,7 +344,7 @@ public class MainActivity extends AppCompatActivity {
                             "                originAjax(e, t);\n" +
                             "            }\n" +
                             "\n" +
-                            "            app.log('begin submit');\n" +
+                            "            app.log('请求提交');\n" +
                             "            Math.random = function() {\n" +
                             "                return 0;\n" +
                             "            }\n" +
@@ -309,6 +375,10 @@ public class MainActivity extends AppCompatActivity {
             @JavascriptInterface
             public void rushResult(boolean success) {
                 new Handler(Looper.getMainLooper()).post(() -> {
+                    if (!waitDlg.btnStop.isShown()) {
+                        return;
+                    }
+
                     if (success) {
                         waitDlg.dismiss();
                         new AlertDialog.Builder(MainActivity.this)
@@ -317,7 +387,8 @@ public class MainActivity extends AppCompatActivity {
                     } else {
                         if (needRetry) {
                             retryCount++;
-                            waitDlg.setMessage("第" + retryCount + "重试中。。。太久没反应就关了");
+                            RushUtil.log("第" + retryCount + "次重试中。。。");
+                            waitDlg.setMessage("第" + retryCount + "次重试中。。。太久没反应就关了");
                             waitDlg.setCanceledOnTouchOutside(false);
                             if (rushParams != null) {
                                 waitDlg.show();
@@ -327,7 +398,7 @@ public class MainActivity extends AppCompatActivity {
                                 cancelQuery = RushUtil.startRush(rushParams, new ValueCallback<String>() {
                                     @Override
                                     public void onReceiveValue(String submitUrl) {
-                                        Log.d("sunron", "提交订单页面url:" + submitUrl);
+                                        RushUtil.log("提交订单页面url:" + submitUrl);
                                         gotoSubmitOrder(submitUrl);
                                     }
                                 });
@@ -348,7 +419,7 @@ public class MainActivity extends AppCompatActivity {
                                             cancelQuery = RushUtil.startRush(rushParams, new ValueCallback<String>() {
                                                 @Override
                                                 public void onReceiveValue(String submitUrl) {
-                                                    Log.d("sunron", "提交订单页面url:" + submitUrl);
+                                                    RushUtil.log("提交订单页面url:" + submitUrl);
                                                     gotoSubmitOrder(submitUrl);
                                                 }
                                             });

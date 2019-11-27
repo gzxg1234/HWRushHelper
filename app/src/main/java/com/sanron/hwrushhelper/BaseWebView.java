@@ -78,7 +78,7 @@ public class BaseWebView extends WebView {
         addJavascriptInterface(new Object() {
             @JavascriptInterface
             public void log(String msg) {
-                Log.d("sunron", msg);
+                RushUtil.log( msg);
             }
         }, "app");
     }

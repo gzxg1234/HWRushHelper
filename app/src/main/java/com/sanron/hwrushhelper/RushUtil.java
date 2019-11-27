@@ -27,6 +27,7 @@ import okhttp3.CacheControl;
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.FormBody;
+import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -41,6 +42,18 @@ import okhttp3.logging.HttpLoggingInterceptor;
 public class RushUtil {
 
     public static SharedPreferences sp = App.getInstance().getSharedPreferences("se", Context.MODE_PRIVATE);
+
+
+    public static Handler sHandler = new Handler(Looper.getMainLooper());
+
+    public static void log(String msg) {
+        if(MainActivity.waitDlg!=null){
+            sHandler.post(() -> {
+                MainActivity.waitDlg.appendLog(msg);
+            });
+        }
+        Log.d("sunron", msg);
+    }
 
     public static final String GET_RUSH_JS = "(function() {\n" +
             "    var ks = [\"uid\", \"user\", \"name\", \"ts\", \"valid\", \"sign\", \"cid\", \"wi\", \"ticket\", \"hasphone\", \"hasmail\",\n" +
@@ -163,6 +176,7 @@ public class RushUtil {
         String skuId = data.optString("skuId");
         String rushJsVer = data.optString("rushJsVer");
         String cookies = data.optString("cookie");
+        String uid = data.optString("uid");
         data.remove("cookie");
         data.remove("rushJsVer");
 
@@ -189,15 +203,16 @@ public class RushUtil {
             while (!cancel.get()) {
                 final int curI = ++i;
                 Call call = rushClient.newCall(request);
-                Log.d("sunron", String.format("第%d次查询是否有货", curI));
+                RushUtil.log( String.format("第%d次查询是否有货", curI));
                 try {
                     Response response = call.execute();
                     if (response.isSuccessful() && response.body() != null && !call.isCanceled() && !cancel.get()) {
                         ResponseBody body = response.body();
-                        if ("text".equals(body.contentType().type())) {
+                        MediaType mediaType = body.contentType();
+                        if (mediaType != null && "text".equals(mediaType.type())) {
                             //返回了html可能是请求太频繁被限制了,休息久一点
-                            Log.d("sunron","请求太频繁，休息2s");
-                            SystemClock.sleep(1000);
+                            RushUtil.log("请求太频繁，休息2s");
+                            SystemClock.sleep(1500);
                             continue;
                         }
                         String respStr = body.string();
@@ -205,21 +220,21 @@ public class RushUtil {
                             JSONObject resp = new JSONObject(respStr);
                             boolean test = new Random().nextInt(10) < 5 && false;
 
-                            Log.d("sunron", String.format("第%d次查询结果%s", curI, resp.toString()));
+                            RushUtil.log(String.format("第%d次查询结果%s", curI, resp.toString()));
                             if ((test || resp.optBoolean("success", false))) {
                                 if (test) {
                                     resp.put("orderSign", "testOrderSign");
-                                    resp.put("uid", "testUid");
+                                    resp.put("uid", uid);
                                 }
 
-                                Log.d("sunron", String.format("第%d次请求查到有货，准备去提交订单页面", curI));
+                                RushUtil.log(String.format("第%d次请求查到有货，准备去提交订单页面", curI));
                                 //成功，有余件，进入下一个提交订单页面
 
                                 //设置Cookies
                                 String key = "orderSign-" + actId + "-" + resp.optString("uid");
                                 String cookie = String.format(key + "=%s;path=/;domain=vmall.com",
                                         resp.optString("orderSign", ""));
-                                Log.d("sunron", "设置cookie=>" + cookie);
+                                RushUtil.log("设置cookie=>" + cookie);
                                 CookieManager.getInstance().setCookie("vmall.com", cookie);
                                 CookieManager.getInstance().flush();
                                 String nowTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
@@ -227,7 +242,7 @@ public class RushUtil {
                                 String submitQuery = String.format("nowTime=%s&skuId=%s&skuIds=%s&activityId=%s&rushbuy_js_version=%s",
                                         nowTime, skuId, skuId, actId, rushJsVer);
                                 String submitUrl = SUBMIT_ORDER_URL + "?" + submitQuery;
-                                new Handler(Looper.getMainLooper()).post(() -> callback.onReceiveValue(submitUrl));
+                                sHandler.post(() -> callback.onReceiveValue(submitUrl));
                                 return;
                             }
                         } catch (JSONException e) {
@@ -263,7 +278,7 @@ public class RushUtil {
             public void onResponse(Call call, Response response) throws IOException {
                 if (response.isSuccessful()) {
                     String date = response.header("Date");
-                    new Handler(Looper.getMainLooper()).post(() -> {
+                    sHandler.post(() -> {
                         Date x = new Date(date);
                         callback.onReceiveValue(x);
                     });
