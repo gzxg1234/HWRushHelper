@@ -63,6 +63,15 @@ public class RushUtil {
         Log.d("sunron", msg);
     }
 
+    public static void log2(String msg) {
+        if (MainActivity.waitDlg != null) {
+            sHandler.post(() -> {
+                MainActivity.waitDlg.appendLog2(msg);
+            });
+        }
+        Log.d("sunron", msg);
+    }
+
 
     public static final String GET_RUSH_JS = "(function() {\n" +
             "    var ks = [\"uid\", \"user\", \"name\", \"ts\", \"valid\", \"sign\", \"cid\", \"wi\", \"ticket\", \"hasphone\", \"hasmail\",\n" +
@@ -253,12 +262,13 @@ public class RushUtil {
         submitData.add("activityUid", uid);
         submitData.add("nickName", cookieMap.get("name"));
 
+        RushUtil.log2("开始查询是否有货。。。。");
         executor.execute(() -> {
             int i = 0;
             while (!cancel.get()) {
                 final int curI = ++i;
                 Call call = rushClient.newCall(request);
-                RushUtil.log(String.format("第%d次查询是否有货", curI));
+                RushUtil.log2(String.format("第%d次查询是否有货", curI));
                 try {
                     Response response = call.execute();
                     if (response.isSuccessful() && response.body() != null && !call.isCanceled() && !cancel.get()) {
@@ -266,7 +276,7 @@ public class RushUtil {
                         MediaType mediaType = body.contentType();
                         if (mediaType != null && "text".equals(mediaType.type())) {
                             //返回了html可能是请求太频繁被限制了,休息久一点
-                            RushUtil.log("请求太频繁，休息2s");
+                            RushUtil.log2("请求太频繁，休息2s");
                             SystemClock.sleep(1500);
                             continue;
                         }
@@ -275,7 +285,7 @@ public class RushUtil {
                             JSONObject resp = new JSONObject(respStr);
                             boolean test = new Random().nextInt(10) < 5 && false;
 
-                            RushUtil.log(String.format("第%d次查询结果%s", curI, resp.toString()));
+                            RushUtil.log2(String.format("第%d次查询结果%s", curI, resp.toString()));
                             if ((test || resp.optBoolean("success", false))) {
 
                                 RushUtil.log(String.format("第%d次请求查到有货，时间为=%s", curI, System.currentTimeMillis()));

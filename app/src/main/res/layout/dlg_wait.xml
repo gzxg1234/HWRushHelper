@@ -15,13 +15,31 @@
         <TextView
             android:id="@+id/tv_log"
             android:layout_width="match_parent"
-            android:layout_height="300dp"
+            android:layout_height="200dp"
             android:layout_margin="10dp"
             android:background="@null"
             android:fadeScrollbars="false"
             android:gravity="top"
             android:scrollbars="vertical"
-            android:text="log\nsda\nasd"
+            android:text="log"
+            android:textColor="#000"
+            android:textSize="14dp" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#000" />
+
+        <TextView
+            android:id="@+id/tv_log2"
+            android:layout_width="match_parent"
+            android:layout_height="100dp"
+            android:layout_margin="10dp"
+            android:background="@null"
+            android:fadeScrollbars="false"
+            android:gravity="top"
+            android:scrollbars="vertical"
+            android:text="log"
             android:textSize="14dp" />
 
         <LinearLayout

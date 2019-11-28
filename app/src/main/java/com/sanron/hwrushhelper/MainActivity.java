@@ -117,6 +117,7 @@ public class MainActivity extends AppCompatActivity {
 
         TextView tvMsg;
         TextView tvLog;
+        TextView tvLog2;
         Button btnCancel, btnStop;
 
         public WaitDialog(@NonNull Context context) {
@@ -128,6 +129,7 @@ public class MainActivity extends AppCompatActivity {
             getWindow().setAttributes(layoutParams);
 
             tvLog = findViewById(R.id.tv_log);
+            tvLog2 = findViewById(R.id.tv_log2);
             tvMsg = findViewById(R.id.tv_msg);
             btnCancel = findViewById(R.id.btn_cancel);
             btnStop = findViewById(R.id.btn_stop);
@@ -135,6 +137,7 @@ public class MainActivity extends AppCompatActivity {
                 dismiss();
             });
             tvLog.setMovementMethod(ScrollingMovementMethod.getInstance());
+            tvLog2.setMovementMethod(ScrollingMovementMethod.getInstance());
         }
 
 
@@ -144,9 +147,20 @@ public class MainActivity extends AppCompatActivity {
 
         public void reset() {
             tvLog.setText("");
+            tvLog2.setText("");
             tvMsg.setText("");
             waitDlg.btnStop.setVisibility(View.VISIBLE);
             waitDlg.btnStop.setText("停止抢单");
+        }
+        public void appendLog2(String log) {
+            if (tvLog2.length() > 0) {
+                tvLog2.append("\n\n");
+            }
+            tvLog2.append(log);
+            int offset = tvLog2.getLineCount() * tvLog2.getLineHeight();
+            if (offset > tvLog2.getHeight()) {
+                tvLog2.scrollTo(0, offset - tvLog2.getHeight());
+            }
         }
 
         public void appendLog(String log) {
