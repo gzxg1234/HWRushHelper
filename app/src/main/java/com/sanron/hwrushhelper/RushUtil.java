@@ -404,8 +404,8 @@ public class RushUtil {
                 }
                 if (cookieFile.exists()) {
                     SQLiteDatabase db = SQLiteDatabase.openDatabase(cookieFile.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
-                    try (Cursor cur = db.query("cookies", new String[]{"value"}, "name=? and is_httponly=? and host_key=?",
-                            new String[]{"euid", "1", ".vmall.com"}, null, null, null)
+                    try (Cursor cur = db.query("cookies", new String[]{"value"}, "name=? and host_key=?",
+                            new String[]{"euid", ".vmall.com"}, null, null, null)
                     ) {
                         if (cur != null && cur.moveToFirst()) {
                             String euid = cur.getString(cur.getColumnIndex("value"));
