@@ -28,7 +28,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.regex.Pattern;
 
 import okhttp3.CacheControl;
 import okhttp3.Call;
@@ -265,7 +264,11 @@ public class RushUtil {
         RushUtil.log2("开始查询是否有货。。。。");
         executor.execute(() -> {
             int i = 0;
+            long reQtime = 0;
             while (!cancel.get()) {
+                if (reQtime == 0) {
+                    reQtime = System.currentTimeMillis();
+                }
                 final int curI = ++i;
                 Call call = rushClient.newCall(request);
                 RushUtil.log2(String.format("第%d次查询是否有货", curI));
@@ -276,7 +279,8 @@ public class RushUtil {
                         MediaType mediaType = body.contentType();
                         if (mediaType != null && "text".equals(mediaType.type())) {
                             //返回了html可能是请求太频繁被限制了,休息久一点
-                            RushUtil.log2("请求太频繁，休息2s");
+                            RushUtil.log2("请求太频繁，休息2s，持续了" + (System.currentTimeMillis() - reQtime) + "ms");
+                            reQtime = 0;
                             SystemClock.sleep(1500);
                             continue;
                         }
@@ -305,7 +309,6 @@ public class RushUtil {
                                 if (cancel.get()) {
                                     return;
                                 }
-                                RushUtil.log("订单提交结果:" + success);
                                 if (success) {
                                     sHandler.post(() -> {
                                         callback.onReceiveValue("true");
@@ -372,9 +375,13 @@ public class RushUtil {
             response = call.execute();
             if (response.isSuccessful() && response.body() != null) {
                 try {
-                    JSONObject obj = new JSONObject(response.body().string());
+                    String json = response.body().string();
+                    JSONObject obj = new JSONObject(json);
                     if (obj.optBoolean("success", false)) {
+                        log("订单提交成功！！！！");
                         return true;
+                    } else {
+                        log("提交订单失败，原因：" + json);
                     }
                 } catch (Throwable e) {
                     e.printStackTrace();
@@ -400,7 +407,7 @@ public class RushUtil {
                     try (Cursor cur = db.query("cookies", new String[]{"value"}, "name=? and is_httponly=? and host_key=?",
                             new String[]{"euid", "1", ".vmall.com"}, null, null, null)
                     ) {
-                        if (cur != null&&cur.moveToFirst()) {
+                        if (cur != null && cur.moveToFirst()) {
                             String euid = cur.getString(cur.getColumnIndex("value"));
                             RushUtil.log("提取到euid=" + euid);
                             sHandler.post(() -> {

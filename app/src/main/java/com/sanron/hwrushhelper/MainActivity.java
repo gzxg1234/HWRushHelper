@@ -17,6 +17,12 @@ import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDialog;
+import androidx.databinding.DataBindingUtil;
+
 import com.sanron.hwrushhelper.databinding.ActivityMainBinding;
 import com.sanron.hwrushhelper.databinding.DlgLogBinding;
 
@@ -27,12 +33,6 @@ import java.text.SimpleDateFormat;
 import java.util.Locale;
 import java.util.Timer;
 import java.util.TimerTask;
-
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.app.AppCompatDialog;
-import androidx.databinding.DataBindingUtil;
 
 public class MainActivity extends AppCompatActivity {
     ActivityMainBinding binding;
@@ -152,25 +152,40 @@ public class MainActivity extends AppCompatActivity {
             waitDlg.btnStop.setVisibility(View.VISIBLE);
             waitDlg.btnStop.setText("停止抢单");
         }
+
         public void appendLog2(String log) {
+            if (tvLog2.length() > 10000000) {
+                tvLog2.setText("");
+            }
             if (tvLog2.length() > 0) {
                 tvLog2.append("\n\n");
             }
             tvLog2.append(log);
-            int offset = tvLog2.getLineCount() * tvLog2.getLineHeight();
-            if (offset > tvLog2.getHeight()) {
-                tvLog2.scrollTo(0, offset - tvLog2.getHeight());
+
+            int scrollAmount = tvLog2.getLayout().getLineTop(tvLog2.getLineCount())
+                    - tvLog2.getHeight();
+            if (scrollAmount > 0) {
+                tvLog2.scrollTo(0, scrollAmount);
+            } else {
+                tvLog2.scrollTo(0, 0);
             }
         }
 
         public void appendLog(String log) {
+            if (tvLog2.length() > 10000000) {
+                tvLog2.setText("");
+            }
             if (tvLog.length() > 0) {
                 tvLog.append("\n\n");
             }
             tvLog.append(log);
-            int offset = tvLog.getLineCount() * tvLog.getLineHeight();
-            if (offset > tvLog.getHeight()) {
-                tvLog.scrollTo(0, offset - tvLog.getHeight());
+
+            int scrollAmount = tvLog.getLayout().getLineTop(tvLog.getLineCount())
+                    - tvLog.getHeight();
+            if (scrollAmount > 0) {
+                tvLog.scrollTo(0, scrollAmount);
+            } else {
+                tvLog.scrollTo(0, 0);
             }
         }
     }

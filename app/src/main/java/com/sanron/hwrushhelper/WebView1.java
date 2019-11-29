@@ -23,9 +23,9 @@ public class WebView1 extends BaseWebView {
 
 
     public static final String JS = " (function() {\n" +
+            "      app.log('尝试获取基础参数');\n" +
             "      var c = 0;\n" +
             "      function xc() {\n" +
-            "        app.log('尝试获取基础参数'+(++c));\n" +
             "        if (c>= 100) {\n" +
             "          native.result('error');\n" +
             "          return;\n" +
