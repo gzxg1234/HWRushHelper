@@ -17,6 +17,8 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
@@ -32,6 +34,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import okhttp3.CacheControl;
 import okhttp3.Call;
 import okhttp3.Callback;
+import okhttp3.Dns;
 import okhttp3.FormBody;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
@@ -164,11 +167,45 @@ public class RushUtil {
     public static OkHttpClient sOkHttpClient;
     public static OkHttpClient rushClient;
 
+
+    public static class LocalDns implements Dns {
+        private String[] NEED_CACHE = {"buy.vmall.com"};
+
+        private Map<String, List<InetAddress>> cacheIps = new HashMap<>();
+
+        public void clearCache() {
+            cacheIps.clear();
+        }
+
+        @Override
+        public List<InetAddress> lookup(String hostname) throws UnknownHostException {
+            for (String ch : NEED_CACHE) {
+                if (ch.equals(hostname)) {
+                    List<InetAddress> inetAddresses = cacheIps.get(hostname);
+                    if (inetAddresses == null) {
+                        inetAddresses = Dns.SYSTEM.lookup(hostname);
+                        if (inetAddresses != null) {
+                            cacheIps.put(hostname, inetAddresses);
+                        }
+                    }
+                    return inetAddresses;
+                }
+            }
+            return Dns.SYSTEM.lookup(hostname);
+        }
+    }
+
+    private static LocalDns LOCAL_DNS = new LocalDns();
+
     static {
         HttpLoggingInterceptor httpLoggingInterceptor = new HttpLoggingInterceptor();
         httpLoggingInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
+        HttpsUtils.SSLParams sslParams = HttpsUtils.getSslSocketFactory(null, null, null);
         sOkHttpClient = new OkHttpClient.Builder()
                 .followSslRedirects(true)
+                .sslSocketFactory(sslParams.sSLSocketFactory, sslParams.trustManager)
+                .hostnameVerifier((hostname, session) -> true)
+                .dns(LOCAL_DNS)
                 .followRedirects(true)
                 .build();
         rushClient = sOkHttpClient.newBuilder()
@@ -319,19 +356,6 @@ public class RushUtil {
                                     });
                                 }
                                 return;
-//
-//                                String cookie = String.format(key + "=%s;path=/;domain=vmall.com",
-//                                        resp.optString("orderSign", ""));
-//                                RushUtil.log("设置cookie=>" + cookie);
-//                                CookieManager.getInstance().setCookie("vmall.com", cookie);
-//                                CookieManager.getInstance().flush();
-//                                String nowTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
-//
-//                                String submitQuery = String.format("nowTime=%s&skuId=%s&skuIds=%s&activityId=%s&rushbuy_js_version=%s",
-//                                        nowTime, skuId, skuId, actId, rushJsVer);
-//                                String submitUrl = SUBMIT_ORDER_URL + "?" + submitQuery;
-//                                sHandler.post(() -> callback.onReceiveValue(submitUrl));
-//                                return;
                             }
                         } catch (JSONException e) {
                             e.printStackTrace();
@@ -362,11 +386,7 @@ public class RushUtil {
 
         Request.Builder builder = new Request.Builder()
                 .header("Cookie", cookie)
-                .header("Sec-Fetch-Mode", "cors")
-                .header("X-Requested-With", "XMLHttpRequest")
-                .header("Sec-Fetch-Site", "same-origin")
                 .header("Origin", "https://buy.vmall.com")
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36")
                 .post(formBody)
                 .url("https://buy.vmall.com/order/create.json");
         Call call = sOkHttpClient.newCall(builder.build());
@@ -388,6 +408,9 @@ public class RushUtil {
                 }
             }
         } catch (IOException e) {
+            if (e instanceof UnknownHostException) {
+                LOCAL_DNS.clearCache();
+            }
             e.printStackTrace();
         }
         return false;
@@ -397,6 +420,13 @@ public class RushUtil {
     public static void getEuid(Context context, ValueCallback<String> callback) {
         RushUtil.executor.execute(() -> {
             try {
+                //预缓存dns
+                try {
+                    LOCAL_DNS.lookup("buy.vmall.com");
+                } catch (Throwable e) {
+                    e.printStackTrace();
+                }
+
                 File appWebview = context.getDir("webview", Context.MODE_PRIVATE);
                 File cookieFile = new File(appWebview, "Cookies");
                 if (!cookieFile.exists()) {
